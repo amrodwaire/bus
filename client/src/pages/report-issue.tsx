@@ -7,48 +7,44 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/language-context";
 import { BottomNav } from "@/components/bottom-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
 import { apiRequest } from "@/lib/queryClient";
 
 type IssueCategory = "technical" | "route" | "feedback";
 
-interface CategoryOption {
-  id: IssueCategory;
-  label: string;
-  icon: typeof Bug;
-  description: string;
-}
-
-const categories: CategoryOption[] = [
-  {
-    id: "technical",
-    label: "مشكلة تقنية",
-    icon: Bug,
-    description: "خلل في التطبيق أو خطأ تقني",
-  },
-  {
-    id: "route",
-    label: "مشكلة في المسار",
-    icon: Route,
-    description: "مشكلة تتعلق بالطرق أو الباصات",
-  },
-  {
-    id: "feedback",
-    label: "اقتراح أو ملاحظة",
-    icon: MessageSquare,
-    description: "شاركنا رأيك لتحسين الخدمة",
-  },
-];
-
 export default function ReportIssue() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   
   const [selectedCategory, setSelectedCategory] = useState<IssueCategory | null>(null);
   const [description, setDescription] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [ticketNumber, setTicketNumber] = useState("");
+
+  const categories = [
+    {
+      id: "technical" as IssueCategory,
+      label: t('technical'),
+      icon: Bug,
+      description: t('technicalDesc'),
+    },
+    {
+      id: "route" as IssueCategory,
+      label: t('route'),
+      icon: Route,
+      description: t('routeDesc'),
+    },
+    {
+      id: "feedback" as IssueCategory,
+      label: t('feedback'),
+      icon: MessageSquare,
+      description: t('feedbackDesc'),
+    },
+  ];
 
   const submitMutation = useMutation({
     mutationFn: async () => {
@@ -62,14 +58,14 @@ export default function ReportIssue() {
       setIsSubmitted(true);
       setTicketNumber(data.ticketNumber || `TKT-${Date.now().toString(36).toUpperCase()}`);
       toast({
-        title: "تم إرسال البلاغ",
-        description: "شكراً لك، سيتم مراجعة بلاغك قريباً",
+        title: t('reportSubmitted'),
+        description: t('reportSubmittedDesc'),
       });
     },
     onError: () => {
       toast({
-        title: "خطأ",
-        description: "فشل في إرسال البلاغ، يرجى المحاولة مرة أخرى",
+        title: t('reportFailed'),
+        description: t('error'),
         variant: "destructive",
       });
     },
@@ -80,8 +76,8 @@ export default function ReportIssue() {
     
     if (!selectedCategory) {
       toast({
-        title: "خطأ",
-        description: "يرجى اختيار نوع المشكلة",
+        title: t('error'),
+        description: t('selectCategoryError'),
         variant: "destructive",
       });
       return;
@@ -89,17 +85,8 @@ export default function ReportIssue() {
 
     if (!description.trim()) {
       toast({
-        title: "خطأ",
-        description: "يرجى وصف المشكلة",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (description.length > 500) {
-      toast({
-        title: "خطأ",
-        description: "الوصف يجب ألا يتجاوز 500 حرف",
+        title: t('error'),
+        description: t('describeIssue'),
         variant: "destructive",
       });
       return;
@@ -120,8 +107,11 @@ export default function ReportIssue() {
       <div className="min-h-screen bg-background pb-20">
         <header className="sticky top-0 z-40 bg-background border-b border-border">
           <div className="flex items-center justify-between p-4">
-            <h1 className="font-bold text-lg">الإبلاغ عن مشكلة</h1>
-            <ThemeToggle />
+            <h1 className="font-bold text-lg">{t('reportIssue')}</h1>
+            <div className="flex items-center gap-2">
+              <LanguageToggle />
+              <ThemeToggle />
+            </div>
           </div>
         </header>
 
@@ -130,16 +120,14 @@ export default function ReportIssue() {
             <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
-            <h2 className="font-bold text-xl mb-2">تم إرسال بلاغك بنجاح</h2>
-            <p className="text-muted-foreground mb-4">
-              شكراً لمساعدتنا في تحسين الخدمة
-            </p>
+            <h2 className="font-bold text-xl mb-2">{t('reportSubmitted')}</h2>
+            <p className="text-muted-foreground mb-4">{t('reportSubmittedDesc')}</p>
             <div className="bg-muted/50 rounded-lg p-4 mb-6">
-              <p className="text-sm text-muted-foreground mb-1">رقم التذكرة</p>
+              <p className="text-sm text-muted-foreground mb-1">{t('ticketNumber')}</p>
               <p className="font-mono font-bold text-lg">{ticketNumber}</p>
             </div>
             <Button onClick={resetForm} data-testid="button-new-report">
-              إرسال بلاغ جديد
+              {t('newReport')}
             </Button>
           </Card>
         </div>
@@ -151,7 +139,6 @@ export default function ReportIssue() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-background border-b border-border">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
@@ -159,18 +146,20 @@ export default function ReportIssue() {
               <AlertTriangle className="h-5 w-5 text-destructive" />
             </div>
             <div>
-              <h1 className="font-bold text-lg">الإبلاغ عن مشكلة</h1>
-              <p className="text-xs text-muted-foreground">ساعدنا في تحسين الخدمة</p>
+              <h1 className="font-bold text-lg">{t('reportIssue')}</h1>
+              <p className="text-xs text-muted-foreground">{t('helpImprove')}</p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       <form onSubmit={handleSubmit} className="p-4 space-y-6">
-        {/* Category Selection */}
         <div className="space-y-3">
-          <Label className="text-base font-semibold">نوع المشكلة</Label>
+          <Label className="text-base font-semibold">{t('issueType')}</Label>
           <div className="grid gap-3">
             {categories.map((category) => {
               const Icon = category.icon;
@@ -206,11 +195,10 @@ export default function ReportIssue() {
           </div>
         </div>
 
-        {/* Description */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label htmlFor="description" className="text-base font-semibold">
-              وصف المشكلة
+              {t('describeIssueLabel')}
             </Label>
             <span className={`text-xs ${description.length > 500 ? 'text-destructive' : 'text-muted-foreground'}`}>
               {description.length}/500
@@ -218,16 +206,14 @@ export default function ReportIssue() {
           </div>
           <Textarea
             id="description"
-            placeholder="اشرح المشكلة بالتفصيل..."
+            placeholder={t('enterIssueDetails')}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="min-h-[150px] resize-none text-right"
-            dir="rtl"
+            className="min-h-[150px] resize-none"
             data-testid="textarea-description"
           />
         </div>
 
-        {/* Submit Button */}
         <Button
           type="submit"
           className="w-full"
@@ -236,11 +222,11 @@ export default function ReportIssue() {
           data-testid="button-submit-report"
         >
           {submitMutation.isPending ? (
-            "جاري الإرسال..."
+            t('submitting')
           ) : (
             <>
-              <Send className="h-4 w-4 ml-2" />
-              إرسال البلاغ
+              <Send className="h-4 w-4" />
+              {t('submitReport')}
             </>
           )}
         </Button>

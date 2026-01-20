@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Bus, ArrowRight, Eye, EyeOff, User, Truck } from "lucide-react";
+import { Bus, ArrowRight, ArrowLeft, Eye, EyeOff, User, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/language-context";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
 
 type UserRole = "citizen" | "driver";
 
@@ -15,6 +17,7 @@ export default function Register() {
   const [, setLocation] = useLocation();
   const { register } = useAuth();
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   
   const [step, setStep] = useState<"role" | "form">("role");
   const [role, setRole] = useState<UserRole>("citizen");
@@ -43,11 +46,10 @@ export default function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
     if (!formData.username || !formData.password || !formData.fullName || !formData.phone) {
       toast({
-        title: "خطأ",
-        description: "يرجى ملء جميع الحقول المطلوبة",
+        title: t('error'),
+        description: t('fillRequiredFields'),
         variant: "destructive",
       });
       return;
@@ -55,8 +57,8 @@ export default function Register() {
 
     if (formData.password !== formData.confirmPassword) {
       toast({
-        title: "خطأ",
-        description: "كلمتا المرور غير متطابقتين",
+        title: t('error'),
+        description: t('passwordsDontMatch'),
         variant: "destructive",
       });
       return;
@@ -64,8 +66,8 @@ export default function Register() {
 
     if (formData.password.length < 6) {
       toast({
-        title: "خطأ",
-        description: "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
+        title: t('error'),
+        description: t('passwordTooShort'),
         variant: "destructive",
       });
       return;
@@ -73,8 +75,8 @@ export default function Register() {
 
     if (role === "driver" && !formData.licenseNumber) {
       toast({
-        title: "خطأ",
-        description: "يرجى إدخال رقم رخصة القيادة",
+        title: t('error'),
+        description: t('enterLicenseNumber'),
         variant: "destructive",
       });
       return;
@@ -96,44 +98,46 @@ export default function Register() {
     
     if (success) {
       toast({
-        title: "تم إنشاء الحساب بنجاح",
-        description: "مرحباً بك في كوستر",
+        title: t('accountCreated'),
+        description: t('welcomeToApp'),
       });
       setLocation(role === "driver" ? "/driver" : "/map");
     } else {
       toast({
-        title: "خطأ في إنشاء الحساب",
-        description: "اسم المستخدم قد يكون مستخدماً مسبقاً",
+        title: t('registerFailed'),
+        description: t('usernameTaken'),
         variant: "destructive",
       });
     }
   };
 
+  const BackArrow = isRTL ? ArrowRight : ArrowLeft;
+
   if (step === "role") {
     return (
       <div className="min-h-screen bg-background">
-        {/* Header */}
         <header className="flex items-center justify-between p-4 border-b border-border">
           <Link href="/">
             <Button variant="ghost" size="icon" data-testid="button-back">
-              <ArrowRight className="h-5 w-5" />
+              <BackArrow className="h-5 w-5" />
             </Button>
           </Link>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
         </header>
 
         <div className="px-4 py-8">
           <div className="max-w-md mx-auto">
-            {/* Logo */}
             <div className="text-center mb-8">
               <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <Bus className="h-8 w-8 text-primary" />
               </div>
-              <h1 className="text-2xl font-bold">إنشاء حساب جديد</h1>
-              <p className="text-muted-foreground mt-2">اختر نوع الحساب</p>
+              <h1 className="text-2xl font-bold">{t('createAccount')}</h1>
+              <p className="text-muted-foreground mt-2">{t('selectRole')}</p>
             </div>
 
-            {/* Role Selection */}
             <div className="grid gap-4">
               <Card 
                 className="p-6 cursor-pointer hover-elevate active-elevate-2"
@@ -145,10 +149,8 @@ export default function Register() {
                     <User className="h-7 w-7 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg">مواطن</h3>
-                    <p className="text-sm text-muted-foreground">
-                      للبحث عن الباصات وحجز المقاعد
-                    </p>
+                    <h3 className="font-bold text-lg">{t('citizen')}</h3>
+                    <p className="text-sm text-muted-foreground">{t('citizenDesc')}</p>
                   </div>
                 </div>
               </Card>
@@ -163,21 +165,18 @@ export default function Register() {
                     <Truck className="h-7 w-7 text-accent-foreground" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg">سائق باص</h3>
-                    <p className="text-sm text-muted-foreground">
-                      لإدارة الباص والطريق والركاب
-                    </p>
+                    <h3 className="font-bold text-lg">{t('driver')}</h3>
+                    <p className="text-sm text-muted-foreground">{t('driverDesc')}</p>
                   </div>
                 </div>
               </Card>
             </div>
 
-            {/* Login Link */}
             <div className="text-center mt-8">
               <p className="text-muted-foreground">
-                لديك حساب بالفعل؟{" "}
+                {t('haveAccount')}{" "}
                 <Link href="/login" className="text-primary font-medium hover:underline" data-testid="link-login">
-                  تسجيل الدخول
+                  {t('login')}
                 </Link>
               </p>
             </div>
@@ -189,7 +188,6 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="flex items-center justify-between p-4 border-b border-border">
         <Button 
           variant="ghost" 
@@ -197,14 +195,16 @@ export default function Register() {
           onClick={() => setStep("role")}
           data-testid="button-back"
         >
-          <ArrowRight className="h-5 w-5" />
+          <BackArrow className="h-5 w-5" />
         </Button>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
       </header>
 
       <div className="px-4 py-6">
         <div className="max-w-sm mx-auto">
-          {/* Title */}
           <div className="text-center mb-6">
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
               {role === "citizen" ? (
@@ -214,30 +214,27 @@ export default function Register() {
               )}
             </div>
             <h1 className="text-xl font-bold">
-              {role === "citizen" ? "تسجيل كمواطن" : "تسجيل كسائق باص"}
+              {role === "citizen" ? t('registerAsCitizen') : t('registerAsDriver')}
             </h1>
           </div>
 
-          {/* Registration Form */}
           <Card className="p-5">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="fullName">الاسم الكامل *</Label>
+                <Label htmlFor="fullName">{t('fullName')} *</Label>
                 <Input
                   id="fullName"
                   name="fullName"
                   type="text"
-                  placeholder="أدخل اسمك الكامل"
+                  placeholder={t('enterFullName')}
                   value={formData.fullName}
                   onChange={handleChange}
                   data-testid="input-fullname"
-                  className="text-right"
-                  dir="rtl"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">رقم الهاتف *</Label>
+                <Label htmlFor="phone">{t('phone')} *</Label>
                 <Input
                   id="phone"
                   name="phone"
@@ -246,80 +243,71 @@ export default function Register() {
                   value={formData.phone}
                   onChange={handleChange}
                   data-testid="input-phone"
-                  className="text-right"
-                  dir="rtl"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="nationalId">الرقم الوطني</Label>
+                <Label htmlFor="nationalId">{t('nationalId')}</Label>
                 <Input
                   id="nationalId"
                   name="nationalId"
                   type="text"
-                  placeholder="الرقم الوطني (اختياري)"
+                  placeholder={t('nationalIdOptional')}
                   value={formData.nationalId}
                   onChange={handleChange}
                   data-testid="input-nationalid"
-                  className="text-right"
-                  dir="rtl"
                 />
               </div>
 
               {role === "driver" && (
                 <div className="space-y-2">
-                  <Label htmlFor="licenseNumber">رقم رخصة القيادة *</Label>
+                  <Label htmlFor="licenseNumber">{t('licenseNumber')} *</Label>
                   <Input
                     id="licenseNumber"
                     name="licenseNumber"
                     type="text"
-                    placeholder="أدخل رقم الرخصة"
+                    placeholder={t('enterPlateNumber')}
                     value={formData.licenseNumber}
                     onChange={handleChange}
                     data-testid="input-license"
-                    className="text-right"
-                    dir="rtl"
                   />
                 </div>
               )}
 
               <div className="border-t border-border pt-4 mt-4">
-                <p className="text-sm text-muted-foreground mb-4">بيانات تسجيل الدخول</p>
+                <p className="text-sm text-muted-foreground mb-4">{t('loginCredentials')}</p>
                 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="username">اسم المستخدم *</Label>
+                    <Label htmlFor="username">{t('username')} *</Label>
                     <Input
                       id="username"
                       name="username"
                       type="text"
-                      placeholder="اختر اسم مستخدم"
+                      placeholder={t('chooseUsername')}
                       value={formData.username}
                       onChange={handleChange}
                       data-testid="input-username"
-                      className="text-right"
-                      dir="rtl"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="password">كلمة المرور *</Label>
+                    <Label htmlFor="password">{t('password')} *</Label>
                     <div className="relative">
                       <Input
                         id="password"
                         name="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="6 أحرف على الأقل"
+                        placeholder={t('atLeast6Chars')}
                         value={formData.password}
                         onChange={handleChange}
                         data-testid="input-password"
-                        className="text-right pl-10"
-                        dir="rtl"
+                        className={isRTL ? "pl-10" : "pr-10"}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className={`absolute ${isRTL ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground`}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -327,17 +315,15 @@ export default function Register() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">تأكيد كلمة المرور *</Label>
+                    <Label htmlFor="confirmPassword">{t('confirmPassword')} *</Label>
                     <Input
                       id="confirmPassword"
                       name="confirmPassword"
                       type="password"
-                      placeholder="أعد إدخال كلمة المرور"
+                      placeholder={t('reenterPassword')}
                       value={formData.confirmPassword}
                       onChange={handleChange}
                       data-testid="input-confirm-password"
-                      className="text-right"
-                      dir="rtl"
                     />
                   </div>
                 </div>
@@ -349,7 +335,7 @@ export default function Register() {
                 disabled={isLoading}
                 data-testid="button-submit-register"
               >
-                {isLoading ? "جاري إنشاء الحساب..." : "إنشاء الحساب"}
+                {isLoading ? t('registering') : t('createAccount')}
               </Button>
             </form>
           </Card>

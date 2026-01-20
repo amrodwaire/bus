@@ -1,31 +1,26 @@
 import { Map, Calendar, User, AlertTriangle, LayoutDashboard } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/lib/auth-context";
-
-interface NavItem {
-  path: string;
-  label: string;
-  icon: typeof Map;
-  testId: string;
-}
-
-const citizenNavItems: NavItem[] = [
-  { path: "/map", label: "الخريطة", icon: Map, testId: "nav-map" },
-  { path: "/reservations", label: "حجوزاتي", icon: Calendar, testId: "nav-reservations" },
-  { path: "/report", label: "بلاغ", icon: AlertTriangle, testId: "nav-report" },
-  { path: "/profile", label: "حسابي", icon: User, testId: "nav-profile" },
-];
-
-const driverNavItems: NavItem[] = [
-  { path: "/driver", label: "لوحة التحكم", icon: LayoutDashboard, testId: "nav-dashboard" },
-  { path: "/map", label: "الخريطة", icon: Map, testId: "nav-map" },
-  { path: "/report", label: "بلاغ", icon: AlertTriangle, testId: "nav-report" },
-  { path: "/profile", label: "حسابي", icon: User, testId: "nav-profile" },
-];
+import { useLanguage } from "@/lib/language-context";
 
 export function BottomNav() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { t } = useLanguage();
+
+  const citizenNavItems = [
+    { path: "/map", label: t('map'), icon: Map, testId: "nav-map" },
+    { path: "/reservations", label: t('myReservations'), icon: Calendar, testId: "nav-reservations" },
+    { path: "/report", label: t('report'), icon: AlertTriangle, testId: "nav-report" },
+    { path: "/profile", label: t('profile'), icon: User, testId: "nav-profile" },
+  ];
+
+  const driverNavItems = [
+    { path: "/driver", label: t('driverDashboard'), icon: LayoutDashboard, testId: "nav-dashboard" },
+    { path: "/map", label: t('map'), icon: Map, testId: "nav-map" },
+    { path: "/report", label: t('report'), icon: AlertTriangle, testId: "nav-report" },
+    { path: "/profile", label: t('profile'), icon: User, testId: "nav-profile" },
+  ];
 
   const navItems = user?.role === "driver" ? driverNavItems : citizenNavItems;
 

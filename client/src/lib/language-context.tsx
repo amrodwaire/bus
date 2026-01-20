@@ -1,0 +1,454 @@
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+
+type Language = "ar" | "en";
+
+interface LanguageContextType {
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: (key: string) => string;
+  isRTL: boolean;
+}
+
+const translations: Record<Language, Record<string, string>> = {
+  ar: {
+    appName: "كوستر",
+    availableBuses: "الباصات المتاحة",
+    nearbyBuses: "الباصات القريبة",
+    bus: "باص",
+    availableSeats: "مقعد متاح",
+    reserveSeat: "احجز مقعد",
+    confirmReservation: "تأكيد الحجز",
+    cancelReservation: "إلغاء",
+    reservationConfirmed: "تم الحجز بنجاح",
+    seatReserved: "تم حجز مقعدك في الباص",
+    reservationFailed: "فشل الحجز",
+    reservationError: "حدث خطأ أثناء الحجز",
+    confirmReservationQuestion: "هل تريد حجز مقعد في هذا الباص؟",
+    locationWarning: "سيتم حجز مقعدك بناءً على موقعك الحالي. تأكد من أنك على مسار الباص.",
+    processing: "جاري الحجز...",
+    noBusesAvailable: "لا توجد باصات متاحة حالياً",
+    busesWillAppear: "سيتم عرض الباصات عند توفرها",
+    yourLocation: "موقعك الحالي",
+    
+    myReservations: "حجوزاتي",
+    activeReservations: "الحجوزات الفعالة",
+    pastReservations: "الحجوزات السابقة",
+    noActiveReservations: "لا توجد حجوزات فعالة",
+    noPastReservations: "لا توجد حجوزات سابقة",
+    cancelBooking: "إلغاء الحجز",
+    priority: "الأولوية",
+    status: "الحالة",
+    confirmed: "مؤكد",
+    completed: "مكتمل",
+    cancelled: "ملغي",
+    pending: "قيد الانتظار",
+    
+    report: "بلاغ",
+    reportIssue: "الإبلاغ عن مشكلة",
+    selectCategory: "اختر نوع المشكلة",
+    technicalIssue: "مشكلة تقنية",
+    technicalIssueDesc: "مشاكل في التطبيق أو الأداء",
+    routeIssue: "مشكلة في المسار",
+    routeIssueDesc: "مشاكل في مسار الباص أو التوقف",
+    generalFeedback: "ملاحظات عامة",
+    generalFeedbackDesc: "اقتراحات أو تعليقات",
+    describeIssue: "صف المشكلة",
+    enterIssueDetails: "اكتب تفاصيل المشكلة هنا...",
+    submitReport: "إرسال البلاغ",
+    submitting: "جاري الإرسال...",
+    reportSubmitted: "تم إرسال البلاغ بنجاح",
+    reportSubmittedDesc: "شكراً لمساعدتنا في تحسين الخدمة",
+    ticketNumber: "رقم البلاغ",
+    saveTicket: "احتفظ برقم البلاغ للمتابعة",
+    newReport: "بلاغ جديد",
+    reportFailed: "فشل الإرسال",
+    selectCategoryError: "يرجى اختيار نوع المشكلة",
+    
+    profile: "حسابي",
+    personalInfo: "المعلومات الشخصية",
+    fullName: "الاسم الكامل",
+    phone: "رقم الهاتف",
+    accountType: "نوع الحساب",
+    citizen: "مواطن",
+    driver: "سائق",
+    settings: "الإعدادات",
+    language: "اللغة",
+    arabic: "العربية",
+    english: "English",
+    darkMode: "الوضع الداكن",
+    logout: "تسجيل الخروج",
+    logoutConfirm: "هل تريد تسجيل الخروج؟",
+    yes: "نعم",
+    no: "لا",
+    
+    welcome: "مرحباً بك في",
+    welcomeDesc: "تطبيق النقل العام في الأردن",
+    login: "تسجيل الدخول",
+    register: "إنشاء حساب",
+    username: "اسم المستخدم",
+    password: "كلمة المرور",
+    confirmPassword: "تأكيد كلمة المرور",
+    createAccount: "إنشاء حساب جديد",
+    haveAccount: "لديك حساب؟",
+    noAccount: "ليس لديك حساب؟",
+    selectRole: "اختر نوع الحساب",
+    citizenDesc: "للبحث عن الباصات والحجز",
+    driverDesc: "لإدارة الباص والركاب",
+    enterFullName: "أدخل اسمك الكامل",
+    enterPhone: "أدخل رقم هاتفك",
+    enterUsername: "أدخل اسم المستخدم",
+    enterPassword: "أدخل كلمة المرور",
+    confirmPasswordAgain: "أعد إدخال كلمة المرور",
+    registering: "جاري التسجيل...",
+    loggingIn: "جاري تسجيل الدخول...",
+    loginFailed: "فشل تسجيل الدخول",
+    registerFailed: "فشل التسجيل",
+    invalidCredentials: "اسم المستخدم أو كلمة المرور غير صحيحة",
+    back: "رجوع",
+    next: "التالي",
+    
+    driverDashboard: "لوحة السائق",
+    busManagement: "إدارة الباص",
+    passengerCount: "عدد الركاب",
+    totalCapacity: "السعة الكلية",
+    busVisibility: "إظهار الباص",
+    visible: "ظاهر",
+    hidden: "مخفي",
+    routeName: "اسم المسار",
+    plateNumber: "رقم اللوحة",
+    saveChanges: "حفظ التغييرات",
+    saving: "جاري الحفظ...",
+    changesSaved: "تم حفظ التغييرات",
+    noBusFound: "لم يتم العثور على باص",
+    createBus: "إنشاء باص جديد",
+    busCreated: "تم إنشاء الباص",
+    enterRouteName: "أدخل اسم المسار",
+    enterPlateNumber: "أدخل رقم اللوحة",
+    enterCapacity: "أدخل السعة",
+    
+    home: "الرئيسية",
+    map: "الخريطة",
+    
+    // Welcome page features
+    liveTracking: "تتبع مباشر",
+    liveTrackingDesc: "شاهد موقع الباصات على الخريطة لحظة بلحظة",
+    quickBooking: "حجز سريع",
+    quickBookingDesc: "احجز مقعدك مسبقاً واحصل على أولوية الركوب",
+    trustedSecure: "موثوق وآمن",
+    trustedSecureDesc: "تطبيق حكومي رسمي لقطاع النقل الأردني",
+    
+    // Bus status
+    full: "ممتلئ",
+    almostFull: "يمتلئ قريباً",
+    available: "متاح",
+    onMap: "على الخريطة",
+    
+    // Reservations page
+    manageReservations: "إدارة حجوزاتك",
+    noReservations: "لا توجد حجوزات",
+    noReservationsDesc: "لم تقم بأي حجوزات بعد. ابحث عن باص وقم بحجز مقعدك!",
+    active: "نشطة",
+    reservationCancelled: "تم إلغاء الحجز",
+    reservationCancelledDesc: "تم إلغاء حجزك بنجاح",
+    cancelFailed: "فشل في إلغاء الحجز",
+    noActiveReservationsShort: "لا توجد حجوزات نشطة",
+    noCompletedReservations: "لا توجد حجوزات مكتملة",
+    noCancelledReservations: "لا توجد حجوزات ملغية",
+    
+    // Report page  
+    helpImprove: "ساعدنا في تحسين الخدمة",
+    issueType: "نوع المشكلة",
+    technical: "مشكلة تقنية",
+    technicalDesc: "خلل في التطبيق أو خطأ تقني",
+    route: "مشكلة في المسار",
+    routeDesc: "مشكلة تتعلق بالطرق أو الباصات",
+    feedback: "اقتراح أو ملاحظة",
+    feedbackDesc: "شاركنا رأيك لتحسين الخدمة",
+    describeIssueLabel: "وصف المشكلة",
+    
+    // Driver dashboard
+    registerBus: "تسجيل باص جديد",
+    noBusRegistered: "لم تقم بتسجيل باصك بعد",
+    registerBusDesc: "قم بتسجيل باصك للبدء في استقبال الحجوزات",
+    enterBusDetails: "أدخل بيانات الباص للبدء",
+    examplePlate: "مثال: 12-34567",
+    exampleRoute: "مثال: عمان - الزرقاء",
+    tripRoute: "مسار الرحلة",
+    reservations: "الحجوزات",
+    bookings: "حجز",
+    noCurrentReservations: "لا توجد حجوزات حالياً",
+    passenger: "راكب",
+    
+    // Profile page
+    nationalId: "الرقم الوطني",
+    licenseNumber: "رقم رخصة القيادة",
+    privacySecurity: "الخصوصية والأمان",
+    termsConditions: "الشروط والأحكام",
+    version: "الإصدار",
+    jordanTransportApp: "تطبيق النقل العام الأردني",
+    
+    // Footer
+    ministryOfTransport: "وزارة النقل - المملكة الأردنية الهاشمية",
+    allRightsReserved: "جميع الحقوق محفوظة",
+    
+    // General errors
+    error: "خطأ",
+    fillAllFields: "يرجى ملء جميع الحقول",
+    fillRequiredFields: "يرجى ملء جميع الحقول المطلوبة",
+    passwordsDontMatch: "كلمتا المرور غير متطابقتين",
+    passwordTooShort: "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
+    enterLicenseNumber: "يرجى إدخال رقم رخصة القيادة",
+    loginSuccess: "تم تسجيل الدخول بنجاح",
+    welcomeToApp: "مرحباً بك في كوستر",
+    accountCreated: "تم إنشاء الحساب بنجاح",
+    usernameTaken: "اسم المستخدم قد يكون مستخدماً مسبقاً",
+    registerAsCitizen: "تسجيل كمواطن",
+    registerAsDriver: "تسجيل كسائق باص",
+    loginCredentials: "بيانات تسجيل الدخول",
+    continueToApp: "ادخل بياناتك للمتابعة",
+    nationalIdOptional: "الرقم الوطني (اختياري)",
+    chooseUsername: "اختر اسم مستخدم",
+    atLeast6Chars: "6 أحرف على الأقل",
+    reenterPassword: "أعد إدخال كلمة المرور",
+  },
+  en: {
+    appName: "Coster",
+    availableBuses: "Available Buses",
+    nearbyBuses: "Nearby Buses",
+    bus: "Bus",
+    availableSeats: "seats available",
+    reserveSeat: "Reserve Seat",
+    confirmReservation: "Confirm Reservation",
+    cancelReservation: "Cancel",
+    reservationConfirmed: "Reservation Confirmed",
+    seatReserved: "Your seat has been reserved",
+    reservationFailed: "Reservation Failed",
+    reservationError: "An error occurred during reservation",
+    confirmReservationQuestion: "Do you want to reserve a seat on this bus?",
+    locationWarning: "Your seat will be reserved based on your current location. Make sure you are on the bus route.",
+    processing: "Processing...",
+    noBusesAvailable: "No buses available",
+    busesWillAppear: "Buses will appear when available",
+    yourLocation: "Your location",
+    
+    myReservations: "My Reservations",
+    activeReservations: "Active Reservations",
+    pastReservations: "Past Reservations",
+    noActiveReservations: "No active reservations",
+    noPastReservations: "No past reservations",
+    cancelBooking: "Cancel Booking",
+    priority: "Priority",
+    status: "Status",
+    confirmed: "Confirmed",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    pending: "Pending",
+    
+    report: "Report",
+    reportIssue: "Report an Issue",
+    selectCategory: "Select issue type",
+    technicalIssue: "Technical Issue",
+    technicalIssueDesc: "App or performance issues",
+    routeIssue: "Route Issue",
+    routeIssueDesc: "Bus route or stop problems",
+    generalFeedback: "General Feedback",
+    generalFeedbackDesc: "Suggestions or comments",
+    describeIssue: "Describe the issue",
+    enterIssueDetails: "Enter issue details here...",
+    submitReport: "Submit Report",
+    submitting: "Submitting...",
+    reportSubmitted: "Report Submitted",
+    reportSubmittedDesc: "Thank you for helping us improve",
+    ticketNumber: "Ticket Number",
+    saveTicket: "Save ticket number for follow-up",
+    newReport: "New Report",
+    reportFailed: "Submission Failed",
+    selectCategoryError: "Please select an issue type",
+    
+    profile: "Profile",
+    personalInfo: "Personal Information",
+    fullName: "Full Name",
+    phone: "Phone Number",
+    accountType: "Account Type",
+    citizen: "Citizen",
+    driver: "Driver",
+    settings: "Settings",
+    language: "Language",
+    arabic: "العربية",
+    english: "English",
+    darkMode: "Dark Mode",
+    logout: "Logout",
+    logoutConfirm: "Do you want to logout?",
+    yes: "Yes",
+    no: "No",
+    
+    welcome: "Welcome to",
+    welcomeDesc: "Jordan's Public Transport App",
+    login: "Login",
+    register: "Register",
+    username: "Username",
+    password: "Password",
+    confirmPassword: "Confirm Password",
+    createAccount: "Create Account",
+    haveAccount: "Already have an account?",
+    noAccount: "Don't have an account?",
+    selectRole: "Select Account Type",
+    citizenDesc: "Search for buses and book",
+    driverDesc: "Manage your bus and passengers",
+    enterFullName: "Enter your full name",
+    enterPhone: "Enter your phone number",
+    enterUsername: "Enter username",
+    enterPassword: "Enter password",
+    confirmPasswordAgain: "Confirm password",
+    registering: "Registering...",
+    loggingIn: "Logging in...",
+    loginFailed: "Login Failed",
+    registerFailed: "Registration Failed",
+    invalidCredentials: "Invalid username or password",
+    back: "Back",
+    next: "Next",
+    
+    driverDashboard: "Driver Dashboard",
+    busManagement: "Bus Management",
+    passengerCount: "Passenger Count",
+    totalCapacity: "Total Capacity",
+    busVisibility: "Bus Visibility",
+    visible: "Visible",
+    hidden: "Hidden",
+    routeName: "Route Name",
+    plateNumber: "Plate Number",
+    saveChanges: "Save Changes",
+    saving: "Saving...",
+    changesSaved: "Changes Saved",
+    noBusFound: "No bus found",
+    createBus: "Create Bus",
+    busCreated: "Bus Created",
+    enterRouteName: "Enter route name",
+    enterPlateNumber: "Enter plate number",
+    enterCapacity: "Enter capacity",
+    
+    home: "Home",
+    map: "Map",
+    
+    // Welcome page features
+    liveTracking: "Live Tracking",
+    liveTrackingDesc: "See bus locations on the map in real-time",
+    quickBooking: "Quick Booking",
+    quickBookingDesc: "Reserve your seat in advance and get priority boarding",
+    trustedSecure: "Trusted & Secure",
+    trustedSecureDesc: "Official government app for Jordan's transport sector",
+    
+    // Bus status
+    full: "Full",
+    almostFull: "Almost Full",
+    available: "Available",
+    onMap: "On map",
+    
+    // Reservations page
+    manageReservations: "Manage your reservations",
+    noReservations: "No reservations",
+    noReservationsDesc: "You haven't made any reservations yet. Find a bus and book your seat!",
+    active: "Active",
+    reservationCancelled: "Reservation Cancelled",
+    reservationCancelledDesc: "Your reservation has been cancelled successfully",
+    cancelFailed: "Failed to cancel reservation",
+    noActiveReservationsShort: "No active reservations",
+    noCompletedReservations: "No completed reservations",
+    noCancelledReservations: "No cancelled reservations",
+    
+    // Report page
+    helpImprove: "Help us improve",
+    issueType: "Issue Type",
+    technical: "Technical Issue",
+    technicalDesc: "App bugs or technical errors",
+    route: "Route Issue",
+    routeDesc: "Problems with routes or buses",
+    feedback: "Feedback",
+    feedbackDesc: "Share your suggestions to improve",
+    describeIssueLabel: "Describe the issue",
+    
+    // Driver dashboard
+    registerBus: "Register New Bus",
+    noBusRegistered: "You haven't registered a bus yet",
+    registerBusDesc: "Register your bus to start receiving reservations",
+    enterBusDetails: "Enter bus details to get started",
+    examplePlate: "e.g. 12-34567",
+    exampleRoute: "e.g. Amman - Zarqa",
+    tripRoute: "Trip Route",
+    reservations: "Reservations",
+    bookings: "bookings",
+    noCurrentReservations: "No reservations currently",
+    passenger: "Passenger",
+    
+    // Profile page
+    nationalId: "National ID",
+    licenseNumber: "License Number",
+    privacySecurity: "Privacy & Security",
+    termsConditions: "Terms & Conditions",
+    version: "Version",
+    jordanTransportApp: "Jordan Public Transport App",
+    
+    // Footer
+    ministryOfTransport: "Ministry of Transport - Hashemite Kingdom of Jordan",
+    allRightsReserved: "All rights reserved",
+    
+    // General errors
+    error: "Error",
+    fillAllFields: "Please fill in all fields",
+    fillRequiredFields: "Please fill in all required fields",
+    passwordsDontMatch: "Passwords do not match",
+    passwordTooShort: "Password must be at least 6 characters",
+    enterLicenseNumber: "Please enter your license number",
+    loginSuccess: "Login successful",
+    welcomeToApp: "Welcome to Coster",
+    accountCreated: "Account created successfully",
+    usernameTaken: "Username may already be taken",
+    registerAsCitizen: "Register as Citizen",
+    registerAsDriver: "Register as Driver",
+    loginCredentials: "Login credentials",
+    continueToApp: "Enter your credentials to continue",
+    nationalIdOptional: "National ID (optional)",
+    chooseUsername: "Choose a username",
+    atLeast6Chars: "At least 6 characters",
+    reenterPassword: "Re-enter password",
+  },
+};
+
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [language, setLanguageState] = useState<Language>(() => {
+    const saved = localStorage.getItem("language");
+    return (saved as Language) || "ar";
+  });
+
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    localStorage.setItem("language", lang);
+  };
+
+  useEffect(() => {
+    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
+    document.documentElement.lang = language;
+  }, [language]);
+
+  const t = (key: string): string => {
+    return translations[language][key] || key;
+  };
+
+  const isRTL = language === "ar";
+
+  return (
+    <LanguageContext.Provider value={{ language, setLanguage, t, isRTL }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+}
+
+export function useLanguage() {
+  const context = useContext(LanguageContext);
+  if (context === undefined) {
+    throw new Error("useLanguage must be used within a LanguageProvider");
+  }
+  return context;
+}

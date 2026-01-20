@@ -1,7 +1,8 @@
-import { Bus, Users, MapPin, Clock } from "lucide-react";
+import { Bus, Users, MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/lib/language-context";
 import type { Bus as BusType } from "@shared/schema";
 
 interface BusCardProps {
@@ -12,18 +13,19 @@ interface BusCardProps {
 }
 
 export function BusCard({ bus, onReserve, showReserveButton = true, compact = false }: BusCardProps) {
+  const { t } = useLanguage();
   const availableSeats = bus.totalCapacity - bus.currentPassengers;
   const isFull = availableSeats <= 0;
   const isAlmostFull = availableSeats <= 3 && availableSeats > 0;
 
   const getStatusBadge = () => {
     if (isFull) {
-      return <Badge variant="destructive">ممتلئ</Badge>;
+      return <Badge variant="destructive">{t('full')}</Badge>;
     }
     if (isAlmostFull) {
-      return <Badge className="bg-yellow-500 text-yellow-950">يمتلئ قريباً</Badge>;
+      return <Badge className="bg-yellow-500 text-yellow-950">{t('almostFull')}</Badge>;
     }
-    return <Badge variant="default">متاح</Badge>;
+    return <Badge variant="default">{t('available')}</Badge>;
   };
 
   if (compact) {
@@ -67,12 +69,12 @@ export function BusCard({ bus, onReserve, showReserveButton = true, compact = fa
             <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
               <div className="flex items-center gap-1">
                 <Users className="h-4 w-4" />
-                <span>{availableSeats} مقعد متاح من {bus.totalCapacity}</span>
+                <span>{availableSeats} {t('availableSeats')}</span>
               </div>
               {bus.currentLat && bus.currentLng && (
                 <div className="flex items-center gap-1">
                   <MapPin className="h-4 w-4" />
-                  <span>على الخريطة</span>
+                  <span>{t('onMap')}</span>
                 </div>
               )}
             </div>
@@ -85,7 +87,7 @@ export function BusCard({ bus, onReserve, showReserveButton = true, compact = fa
             data-testid={`button-reserve-bus-${bus.id}`}
             className="flex-shrink-0"
           >
-            احجز مقعد
+            {t('reserveSeat')}
           </Button>
         )}
       </div>

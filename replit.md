@@ -1,15 +1,16 @@
 # Coster (كوستر) - Jordan Public Transport App
 
 ## Overview
-Coster is a government transport application for Jordan's public transport sector. It allows bus drivers to manage their routes and passenger capacity, while citizens can track buses in real-time and reserve seats.
+Coster is a bilingual (Arabic/English) government transport application for Jordan's public transport sector. It allows bus drivers to manage their routes and passenger capacity, while citizens can track buses in real-time on an interactive map and reserve seats.
 
 ## Current State
 MVP complete with:
 - User authentication (citizen and driver registration)
-- Interactive map showing available buses
+- Real interactive map with React-Leaflet and OpenStreetMap
 - Reservation system with priority-based booking
 - Driver dashboard for capacity management
 - Issue reporting system
+- **Bilingual support (Arabic/English)** with language toggle
 
 ## Architecture
 
@@ -18,7 +19,9 @@ MVP complete with:
 - **Routing**: Wouter
 - **State Management**: TanStack Query
 - **UI Components**: Shadcn/UI + Tailwind CSS
-- **Language**: Arabic RTL with Cairo font
+- **Mapping**: React-Leaflet 4.2.1 with OpenStreetMap tiles
+- **Internationalization**: Custom i18n context with Arabic (RTL) and English (LTR) support
+- **Font**: Cairo (Arabic-optimized Google Font)
 
 ### Backend (Express)
 - **Framework**: Express.js
@@ -32,11 +35,20 @@ MVP complete with:
 - **Issue Reports**: Technical issue reporting
 
 ## Key Features
-1. **Dual Registration**: Separate flows for citizens and drivers
-2. **Real-time Bus Tracking**: Map view with bus markers showing availability
-3. **Smart Reservations**: Priority system based on booking order
-4. **Driver Controls**: Passenger count, visibility toggle, route management
-5. **Issue Reporting**: Category-based technical issue submission
+1. **Bilingual UI**: Toggle between Arabic (RTL) and English (LTR) with localStorage persistence
+2. **Dual Registration**: Separate flows for citizens and drivers
+3. **Real-time Bus Tracking**: Interactive map with custom markers showing seat availability
+4. **Smart Reservations**: Priority system based on booking order
+5. **Driver Controls**: Passenger count, visibility toggle, route management
+6. **Issue Reporting**: Category-based technical issue submission
+
+## i18n System
+- Language context at `client/src/lib/language-context.tsx`
+- Language toggle component at `client/src/components/language-toggle.tsx`
+- Translation dictionary with 80+ keys covering all UI strings
+- Document `dir` and `lang` attributes automatically updated
+- Preference stored in localStorage under "language" key
+- Default language: Arabic ("ar")
 
 ## API Endpoints
 - `POST /api/auth/login` - User login

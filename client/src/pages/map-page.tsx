@@ -14,10 +14,12 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/language-context";
 import { MapView } from "@/components/map-view";
 import { BusCard } from "@/components/bus-card";
 import { BottomNav } from "@/components/bottom-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { apiRequest } from "@/lib/queryClient";
 import type { Bus as BusType } from "@shared/schema";
@@ -25,6 +27,7 @@ import type { Bus as BusType } from "@shared/schema";
 export default function MapPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   
   const [selectedBus, setSelectedBus] = useState<BusType | null>(null);
@@ -67,8 +70,8 @@ export default function MapPage() {
     },
     onSuccess: () => {
       toast({
-        title: "تم الحجز بنجاح",
-        description: "تم حجز مقعدك في الباص",
+        title: t('reservationConfirmed'),
+        description: t('seatReserved'),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/buses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/reservations"] });
@@ -77,8 +80,8 @@ export default function MapPage() {
     },
     onError: (error: Error) => {
       toast({
-        title: "فشل الحجز",
-        description: error.message || "حدث خطأ أثناء الحجز",
+        title: t('reservationFailed'),
+        description: error.message || t('reservationError'),
         variant: "destructive",
       });
     },
@@ -112,15 +115,16 @@ export default function MapPage() {
               <Bus className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-bold text-lg">كوستر</h1>
-              <p className="text-xs text-muted-foreground">الباصات المتاحة</p>
+              <h1 className="font-bold text-lg">{t('appName')}</h1>
+              <p className="text-xs text-muted-foreground">{t('availableBuses')}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="gap-1">
               <MapPin className="h-3 w-3" />
-              عمان
+              Amman
             </Badge>
+            <LanguageToggle />
             <ThemeToggle />
           </div>
         </div>
@@ -140,20 +144,20 @@ export default function MapPage() {
       {/* Bus List Section */}
       <section className="px-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-lg">الباصات القريبة</h2>
-          <Badge variant="outline">{visibleBuses.length} باص</Badge>
+          <h2 className="font-bold text-lg">{t('nearbyBuses')}</h2>
+          <Badge variant="outline">{visibleBuses.length} {t('bus')}</Badge>
         </div>
 
         {isLoading ? (
-          <LoadingSpinner text="جاري تحميل الباصات..." />
+          <LoadingSpinner />
         ) : visibleBuses.length === 0 ? (
           <Card className="p-8 text-center">
             <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
               <Bus className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="font-semibold mb-2">لا توجد باصات متاحة</h3>
+            <h3 className="font-semibold mb-2">{t('noBusesAvailable')}</h3>
             <p className="text-sm text-muted-foreground">
-              سيتم عرض الباصات المتاحة عند توفرها
+              {t('busesWillAppear')}
             </p>
           </Card>
         ) : (
@@ -183,7 +187,7 @@ export default function MapPage() {
                   <h3 className="font-bold">{selectedBus.routeName}</h3>
                   <p className="text-sm text-muted-foreground">{selectedBus.plateNumber}</p>
                   <p className="text-sm mt-1">
-                    {selectedBus.totalCapacity - selectedBus.currentPassengers} مقعد متاح
+                    {selectedBus.totalCapacity - selectedBus.currentPassengers} {t('availableSeats')}
                   </p>
                 </div>
               </div>
@@ -204,7 +208,7 @@ export default function MapPage() {
                 onClick={() => handleReserve(selectedBus)}
                 data-testid="button-reserve-from-details"
               >
-                احجز مقعد
+                {t('reserveSeat')}
               </Button>
             )}
           </Card>
@@ -215,9 +219,9 @@ export default function MapPage() {
       <Dialog open={showReservationDialog} onOpenChange={setShowReservationDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>تأكيد الحجز</DialogTitle>
+            <DialogTitle>{t('confirmReservation')}</DialogTitle>
             <DialogDescription>
-              هل تريد حجز مقعد في هذا الباص؟
+              {t('confirmReservationQuestion')}
             </DialogDescription>
           </DialogHeader>
           
@@ -238,7 +242,7 @@ export default function MapPage() {
               <div className="flex items-start gap-2 mt-4 p-3 bg-accent/50 rounded-lg">
                 <AlertCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                 <p className="text-sm">
-                  سيتم حجز مقعدك بناءً على موقعك الحالي. تأكد من أنك على مسار الباص.
+                  {t('locationWarning')}
                 </p>
               </div>
             </div>
@@ -250,7 +254,7 @@ export default function MapPage() {
               onClick={() => setShowReservationDialog(false)}
               data-testid="button-cancel-reservation"
             >
-              إلغاء
+              {t('cancelReservation')}
             </Button>
             <Button
               onClick={confirmReservation}
@@ -258,11 +262,11 @@ export default function MapPage() {
               data-testid="button-confirm-reservation"
             >
               {reserveMutation.isPending ? (
-                "جاري الحجز..."
+                t('processing')
               ) : (
                 <>
-                  <Check className="h-4 w-4 ml-1" />
-                  تأكيد الحجز
+                  <Check className="h-4 w-4" />
+                  {t('confirmReservation')}
                 </>
               )}
             </Button>

@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { MapPin, Bus, Navigation } from "lucide-react";
+import { useEffect } from "react";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { Icon, divIcon } from "leaflet";
+import { Bus, Navigation } from "lucide-react";
 import type { Bus as BusType, RouteWaypoint } from "@shared/schema";
+import { useLanguage } from "@/lib/language-context";
+import "leaflet/dist/leaflet.css";
 
 interface MapViewProps {
   buses: BusType[];
@@ -12,6 +16,119 @@ interface MapViewProps {
   showUserLocation?: boolean;
 }
 
+function MapController({ center }: { center: { lat: number; lng: number } }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([center.lat, center.lng], map.getZoom());
+  }, [center, map]);
+  return null;
+}
+
+function createBusIcon(availableSeats: number, isSelected: boolean) {
+  const bgColor = availableSeats === 0 
+    ? '#ef4444' 
+    : availableSeats <= 3 
+      ? '#eab308' 
+      : '#22c55e';
+  
+  return divIcon({
+    className: 'custom-bus-marker',
+    html: `
+      <div style="
+        position: relative;
+        width: 48px;
+        height: 48px;
+        ${isSelected ? 'transform: scale(1.2);' : ''}
+      ">
+        <div style="
+          width: 48px;
+          height: 48px;
+          background: ${bgColor};
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+          ${isSelected ? 'box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.5), 0 4px 6px rgba(0,0,0,0.3);' : ''}
+        ">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 6v6"/>
+            <path d="M15 6v6"/>
+            <path d="M2 12h19.6"/>
+            <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/>
+            <circle cx="7" cy="18" r="2"/>
+            <path d="M9 18h5"/>
+            <circle cx="16" cy="18" r="2"/>
+          </svg>
+        </div>
+        <div style="
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          width: 24px;
+          height: 24px;
+          background: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: bold;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          border: 1px solid #e5e5e5;
+        ">${availableSeats}</div>
+      </div>
+    `,
+    iconSize: [48, 48],
+    iconAnchor: [24, 48],
+    popupAnchor: [0, -48],
+  });
+}
+
+const userLocationIcon = divIcon({
+  className: 'custom-user-marker',
+  html: `
+    <div style="position: relative;">
+      <div style="
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 40px;
+        height: 40px;
+        background: rgba(59, 130, 246, 0.3);
+        border-radius: 50%;
+        animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+      "></div>
+      <div style="
+        width: 32px;
+        height: 32px;
+        background: #3b82f6;
+        border-radius: 50%;
+        border: 4px solid white;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+        </svg>
+      </div>
+    </div>
+    <style>
+      @keyframes ping {
+        75%, 100% {
+          transform: translate(-50%, -50%) scale(2);
+          opacity: 0;
+        }
+      }
+    </style>
+  `,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+});
+
 export function MapView({
   buses,
   waypoints = [],
@@ -21,157 +138,74 @@ export function MapView({
   height = "400px",
   showUserLocation = true,
 }: MapViewProps) {
-  const mapRef = useRef<HTMLDivElement>(null);
+  const { t } = useLanguage();
   
-  // Jordan's approximate center (Amman)
   const defaultCenter = { lat: 31.9539, lng: 35.9106 };
   const center = userLocation || defaultCenter;
-
-  // Calculate bounds to show all buses
   const visibleBuses = buses.filter(b => b.isVisible && b.currentLat && b.currentLng);
 
   return (
     <div 
-      ref={mapRef} 
-      className="relative bg-muted rounded-lg overflow-hidden"
+      className="relative rounded-lg overflow-hidden shadow-md"
       style={{ height }}
     >
-      {/* Map Background - Simulated map view */}
-      <div className="absolute inset-0 bg-gradient-to-br from-green-100 to-green-50 dark:from-green-950 dark:to-green-900">
-        {/* Grid lines to simulate map */}
-        <svg className="absolute inset-0 w-full h-full opacity-20">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
+      <MapContainer
+        center={[center.lat, center.lng]}
+        zoom={13}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
         
-        {/* Main roads simulation */}
-        <div className="absolute inset-0">
-          <div className="absolute top-1/2 left-0 right-0 h-2 bg-gray-300 dark:bg-gray-700 transform -translate-y-1/2" />
-          <div className="absolute top-0 bottom-0 left-1/2 w-2 bg-gray-300 dark:bg-gray-700 transform -translate-x-1/2" />
-          <div className="absolute top-1/4 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-800" />
-          <div className="absolute top-3/4 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-800" />
-        </div>
-      </div>
+        <MapController center={center} />
 
-      {/* User Location Marker */}
-      {showUserLocation && userLocation && (
-        <div 
-          className="absolute z-20 transform -translate-x-1/2 -translate-y-1/2"
-          style={{ 
-            top: '50%', 
-            left: '50%',
-          }}
-        >
-          <div className="relative">
-            <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-30" style={{ width: 32, height: 32 }} />
-            <div className="w-8 h-8 bg-blue-500 rounded-full border-4 border-white shadow-lg flex items-center justify-center">
-              <Navigation className="h-4 w-4 text-white" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bus Markers */}
-      {visibleBuses.map((bus, index) => {
-        const availableSeats = bus.totalCapacity - bus.currentPassengers;
-        const isSelected = selectedBusId === bus.id;
-        
-        // Position buses in different locations on the map
-        const positions = [
-          { top: '30%', left: '25%' },
-          { top: '45%', left: '70%' },
-          { top: '60%', left: '40%' },
-          { top: '25%', left: '60%' },
-          { top: '70%', left: '20%' },
-          { top: '55%', left: '80%' },
-        ];
-        const pos = positions[index % positions.length];
-        
-        return (
-          <div
-            key={bus.id}
-            className={`absolute z-10 transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform hover:scale-110 ${
-              isSelected ? 'scale-110 z-30' : ''
-            }`}
-            style={{ top: pos.top, left: pos.left }}
-            onClick={() => onBusClick?.(bus)}
-            data-testid={`bus-marker-${bus.id}`}
+        {showUserLocation && userLocation && (
+          <Marker 
+            position={[userLocation.lat, userLocation.lng]} 
+            icon={userLocationIcon}
           >
-            <div className={`relative ${isSelected ? 'ring-4 ring-primary/50 rounded-xl' : ''}`}>
-              <div className={`w-12 h-12 rounded-lg flex items-center justify-center shadow-lg ${
-                availableSeats === 0 
-                  ? 'bg-destructive' 
-                  : availableSeats <= 3 
-                    ? 'bg-yellow-500' 
-                    : 'bg-primary'
-              }`}>
-                <Bus className="h-6 w-6 text-white" />
-              </div>
-              {/* Seats badge */}
-              <div className="absolute -top-2 -right-2 w-6 h-6 bg-white dark:bg-card rounded-full flex items-center justify-center shadow-md border border-border">
-                <span className="text-xs font-bold">{availableSeats}</span>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+            <Popup>{t('yourLocation')}</Popup>
+          </Marker>
+        )}
 
-      {/* Route waypoints */}
-      {waypoints.map((waypoint, index) => (
-        <div
-          key={waypoint.id}
-          className="absolute z-5 transform -translate-x-1/2 -translate-y-1/2"
-          style={{ 
-            top: `${30 + (index * 15) % 60}%`, 
-            left: `${20 + (index * 20) % 70}%` 
-          }}
-        >
-          <div className="w-4 h-4 bg-accent rounded-full border-2 border-primary" />
-          {waypoint.name && (
-            <span className="absolute top-5 left-1/2 -translate-x-1/2 text-xs bg-background px-1 rounded whitespace-nowrap">
-              {waypoint.name}
-            </span>
-          )}
-        </div>
-      ))}
+        {visibleBuses.map((bus) => {
+          const availableSeats = bus.totalCapacity - bus.currentPassengers;
+          const isSelected = selectedBusId === bus.id;
+          
+          return (
+            <Marker
+              key={bus.id}
+              position={[bus.currentLat!, bus.currentLng!]}
+              icon={createBusIcon(availableSeats, isSelected)}
+              eventHandlers={{
+                click: () => onBusClick?.(bus),
+              }}
+            >
+              <Popup>
+                <div className="text-center p-2">
+                  <h3 className="font-bold text-base">{bus.routeName}</h3>
+                  <p className="text-sm text-gray-600">{bus.plateNumber}</p>
+                  <p className="text-sm mt-1">
+                    {availableSeats} {t('availableSeats')}
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+      </MapContainer>
 
-      {/* Empty state */}
       {visibleBuses.length === 0 && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
-          <Bus className="h-12 w-12 text-muted-foreground mb-3" />
-          <p className="text-muted-foreground font-medium">لا توجد باصات متاحة حالياً</p>
-          <p className="text-sm text-muted-foreground">سيتم عرض الباصات عند توفرها</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-[1000]">
+          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-3">
+            <Bus className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <p className="text-muted-foreground font-medium">{t('noBusesAvailable')}</p>
+          <p className="text-sm text-muted-foreground">{t('busesWillAppear')}</p>
         </div>
-      )}
-
-      {/* Map controls */}
-      <div className="absolute bottom-4 left-4 flex flex-col gap-2">
-        <button 
-          className="w-10 h-10 bg-card rounded-md shadow-md flex items-center justify-center hover-elevate"
-          data-testid="button-zoom-in"
-        >
-          <span className="text-xl font-medium">+</span>
-        </button>
-        <button 
-          className="w-10 h-10 bg-card rounded-md shadow-md flex items-center justify-center hover-elevate"
-          data-testid="button-zoom-out"
-        >
-          <span className="text-xl font-medium">−</span>
-        </button>
-      </div>
-
-      {/* Current location button */}
-      {showUserLocation && (
-        <button 
-          className="absolute bottom-4 right-4 w-10 h-10 bg-card rounded-md shadow-md flex items-center justify-center hover-elevate"
-          data-testid="button-my-location"
-        >
-          <Navigation className="h-5 w-5 text-primary" />
-        </button>
       )}
     </div>
   );

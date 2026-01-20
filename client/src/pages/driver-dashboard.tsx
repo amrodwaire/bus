@@ -3,12 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Bus, 
   Users, 
-  MapPin, 
   Eye, 
   EyeOff, 
   Plus, 
   Minus, 
-  Settings,
   Route,
   User
 } from "lucide-react";
@@ -28,8 +26,10 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/language-context";
 import { BottomNav } from "@/components/bottom-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { MapView } from "@/components/map-view";
 import { apiRequest } from "@/lib/queryClient";
@@ -38,6 +38,7 @@ import type { Bus as BusType, Reservation, RouteWaypoint } from "@shared/schema"
 export default function DriverDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   
   const [showBusDialog, setShowBusDialog] = useState(false);
@@ -47,25 +48,21 @@ export default function DriverDashboard() {
     totalCapacity: 15,
   });
 
-  // Fetch driver's bus
   const { data: driverBus, isLoading: busLoading } = useQuery<BusType | null>({
     queryKey: [`/api/buses/driver/${user?.id}`],
     enabled: !!user?.id,
   });
 
-  // Fetch reservations for this bus
   const { data: reservations = [] } = useQuery<Reservation[]>({
     queryKey: [`/api/reservations/bus/${driverBus?.id}`],
     enabled: !!driverBus?.id,
   });
 
-  // Fetch route waypoints
   const { data: waypoints = [] } = useQuery<RouteWaypoint[]>({
     queryKey: [`/api/routes/${driverBus?.id}`],
     enabled: !!driverBus?.id,
   });
 
-  // Create bus mutation
   const createBusMutation = useMutation({
     mutationFn: async (data: typeof busFormData) => {
       return apiRequest("POST", "/api/buses", {
@@ -75,22 +72,21 @@ export default function DriverDashboard() {
     },
     onSuccess: () => {
       toast({
-        title: "تم إنشاء الباص",
-        description: "يمكنك الآن إدارة باصك وتحديد الطريق",
+        title: t('busCreated'),
+        description: t('registerBusDesc'),
       });
       queryClient.invalidateQueries({ queryKey: [`/api/buses/driver/${user?.id}`] });
       setShowBusDialog(false);
     },
     onError: () => {
       toast({
-        title: "خطأ",
-        description: "فشل في إنشاء الباص",
+        title: t('error'),
+        description: t('error'),
         variant: "destructive",
       });
     },
   });
 
-  // Update bus mutation
   const updateBusMutation = useMutation({
     mutationFn: async (updates: Partial<BusType>) => {
       return apiRequest("PATCH", `/api/buses/${driverBus?.id}`, updates);
@@ -101,8 +97,8 @@ export default function DriverDashboard() {
     },
     onError: () => {
       toast({
-        title: "خطأ",
-        description: "فشل في تحديث الباص",
+        title: t('error'),
+        description: t('error'),
         variant: "destructive",
       });
     },
@@ -118,10 +114,8 @@ export default function DriverDashboard() {
     if (!driverBus) return;
     updateBusMutation.mutate({ isVisible: !driverBus.isVisible });
     toast({
-      title: driverBus.isVisible ? "تم إخفاء الباص" : "تم إظهار الباص",
-      description: driverBus.isVisible 
-        ? "الباص غير مرئي للركاب الآن" 
-        : "الباص مرئي للركاب الآن",
+      title: driverBus.isVisible ? t('hidden') : t('visible'),
+      description: driverBus.isVisible ? t('hidden') : t('visible'),
     });
   };
 
@@ -138,11 +132,14 @@ export default function DriverDashboard() {
       <div className="min-h-screen bg-background pb-20">
         <header className="sticky top-0 z-40 bg-background border-b border-border">
           <div className="flex items-center justify-between p-4">
-            <h1 className="font-bold text-lg">لوحة تحكم السائق</h1>
-            <ThemeToggle />
+            <h1 className="font-bold text-lg">{t('driverDashboard')}</h1>
+            <div className="flex items-center gap-2">
+              <LanguageToggle />
+              <ThemeToggle />
+            </div>
           </div>
         </header>
-        <LoadingSpinner text="جاري التحميل..." />
+        <LoadingSpinner />
         <BottomNav />
       </div>
     );
@@ -153,8 +150,11 @@ export default function DriverDashboard() {
       <div className="min-h-screen bg-background pb-20">
         <header className="sticky top-0 z-40 bg-background border-b border-border">
           <div className="flex items-center justify-between p-4">
-            <h1 className="font-bold text-lg">لوحة تحكم السائق</h1>
-            <ThemeToggle />
+            <h1 className="font-bold text-lg">{t('driverDashboard')}</h1>
+            <div className="flex items-center gap-2">
+              <LanguageToggle />
+              <ThemeToggle />
+            </div>
           </div>
         </header>
 
@@ -163,58 +163,49 @@ export default function DriverDashboard() {
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <Bus className="h-8 w-8 text-primary" />
             </div>
-            <h2 className="font-bold text-xl mb-2">لم تقم بتسجيل باصك بعد</h2>
-            <p className="text-muted-foreground mb-6">
-              قم بتسجيل باصك للبدء في استقبال الحجوزات
-            </p>
+            <h2 className="font-bold text-xl mb-2">{t('noBusRegistered')}</h2>
+            <p className="text-muted-foreground mb-6">{t('registerBusDesc')}</p>
             <Button onClick={() => setShowBusDialog(true)} data-testid="button-add-bus">
-              <Plus className="h-4 w-4 ml-1" />
-              تسجيل باص جديد
+              <Plus className="h-4 w-4" />
+              {t('registerBus')}
             </Button>
           </Card>
         </div>
 
-        {/* Create Bus Dialog */}
         <Dialog open={showBusDialog} onOpenChange={setShowBusDialog}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>تسجيل باص جديد</DialogTitle>
-              <DialogDescription>
-                أدخل بيانات الباص للبدء
-              </DialogDescription>
+              <DialogTitle>{t('createBus')}</DialogTitle>
+              <DialogDescription>{t('enterBusDetails')}</DialogDescription>
             </DialogHeader>
             
             <form onSubmit={handleCreateBus} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="plateNumber">رقم اللوحة</Label>
+                <Label htmlFor="plateNumber">{t('plateNumber')}</Label>
                 <Input
                   id="plateNumber"
-                  placeholder="مثال: 12-34567"
+                  placeholder={t('examplePlate')}
                   value={busFormData.plateNumber}
                   onChange={(e) => setBusFormData({ ...busFormData, plateNumber: e.target.value })}
                   data-testid="input-plate-number"
-                  className="text-right"
-                  dir="rtl"
                   required
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="routeName">اسم الخط</Label>
+                <Label htmlFor="routeName">{t('routeName')}</Label>
                 <Input
                   id="routeName"
-                  placeholder="مثال: عمان - الزرقاء"
+                  placeholder={t('exampleRoute')}
                   value={busFormData.routeName}
                   onChange={(e) => setBusFormData({ ...busFormData, routeName: e.target.value })}
                   data-testid="input-route-name"
-                  className="text-right"
-                  dir="rtl"
                   required
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="capacity">سعة الباص</Label>
+                <Label htmlFor="capacity">{t('totalCapacity')}</Label>
                 <Input
                   id="capacity"
                   type="number"
@@ -223,8 +214,6 @@ export default function DriverDashboard() {
                   value={busFormData.totalCapacity}
                   onChange={(e) => setBusFormData({ ...busFormData, totalCapacity: parseInt(e.target.value) || 15 })}
                   data-testid="input-capacity"
-                  className="text-right"
-                  dir="rtl"
                 />
               </div>
 
@@ -234,7 +223,7 @@ export default function DriverDashboard() {
                   disabled={createBusMutation.isPending}
                   data-testid="button-submit-bus"
                 >
-                  {createBusMutation.isPending ? "جاري التسجيل..." : "تسجيل الباص"}
+                  {createBusMutation.isPending ? t('registering') : t('createBus')}
                 </Button>
               </DialogFooter>
             </form>
@@ -248,24 +237,23 @@ export default function DriverDashboard() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-background border-b border-border">
         <div className="flex items-center justify-between p-4">
           <div>
-            <h1 className="font-bold text-lg">لوحة تحكم السائق</h1>
+            <h1 className="font-bold text-lg">{t('driverDashboard')}</h1>
             <p className="text-xs text-muted-foreground">{driverBus.routeName}</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={driverBus.isVisible ? "default" : "secondary"}>
-              {driverBus.isVisible ? "مرئي" : "مخفي"}
+              {driverBus.isVisible ? t('visible') : t('hidden')}
             </Badge>
+            <LanguageToggle />
             <ThemeToggle />
           </div>
         </div>
       </header>
 
       <div className="p-4 space-y-4">
-        {/* Bus Info Card */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -279,7 +267,6 @@ export default function DriverDashboard() {
             </div>
           </div>
           
-          {/* Visibility Toggle */}
           <div className="flex items-center justify-between py-3 border-t border-border">
             <div className="flex items-center gap-2">
               {driverBus.isVisible ? (
@@ -287,7 +274,7 @@ export default function DriverDashboard() {
               ) : (
                 <EyeOff className="h-5 w-5 text-muted-foreground" />
               )}
-              <span className="font-medium">إظهار الباص على الخريطة</span>
+              <span className="font-medium">{t('busVisibility')}</span>
             </div>
             <Switch
               checked={driverBus.isVisible}
@@ -297,15 +284,14 @@ export default function DriverDashboard() {
           </div>
         </Card>
 
-        {/* Passenger Counter */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold flex items-center gap-2">
               <Users className="h-5 w-5" />
-              عدد الركاب
+              {t('passengerCount')}
             </h3>
             <Badge variant={availableSeats === 0 ? "destructive" : availableSeats <= 3 ? "secondary" : "default"}>
-              {availableSeats === 0 ? "ممتلئ" : `${availableSeats} مقعد متاح`}
+              {availableSeats === 0 ? t('full') : `${availableSeats} ${t('availableSeats')}`}
             </Badge>
           </div>
           
@@ -323,7 +309,7 @@ export default function DriverDashboard() {
             
             <div className="text-center min-w-[100px]">
               <div className="text-4xl font-bold">{driverBus.currentPassengers}</div>
-              <div className="text-sm text-muted-foreground">من {driverBus.totalCapacity}</div>
+              <div className="text-sm text-muted-foreground">/ {driverBus.totalCapacity}</div>
             </div>
             
             <Button
@@ -337,7 +323,6 @@ export default function DriverDashboard() {
             </Button>
           </div>
           
-          {/* Progress bar */}
           <div className="mt-4">
             <div className="h-3 bg-muted rounded-full overflow-hidden">
               <div 
@@ -354,11 +339,10 @@ export default function DriverDashboard() {
           </div>
         </Card>
 
-        {/* Mini Map */}
         <Card className="p-4">
           <h3 className="font-bold flex items-center gap-2 mb-3">
             <Route className="h-5 w-5" />
-            مسار الرحلة
+            {t('tripRoute')}
           </h3>
           <MapView
             buses={[driverBus]}
@@ -368,20 +352,17 @@ export default function DriverDashboard() {
           />
         </Card>
 
-        {/* Reservations */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold flex items-center gap-2">
               <User className="h-5 w-5" />
-              الحجوزات
+              {t('reservations')}
             </h3>
-            <Badge variant="outline">{pendingReservations.length} حجز</Badge>
+            <Badge variant="outline">{pendingReservations.length} {t('bookings')}</Badge>
           </div>
           
           {pendingReservations.length === 0 ? (
-            <p className="text-center text-muted-foreground py-4">
-              لا توجد حجوزات حالياً
-            </p>
+            <p className="text-center text-muted-foreground py-4">{t('noCurrentReservations')}</p>
           ) : (
             <div className="space-y-2">
               {pendingReservations.slice(0, 5).map((reservation, index) => (
@@ -393,10 +374,10 @@ export default function DriverDashboard() {
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                       <User className="h-4 w-4 text-primary" />
                     </div>
-                    <span className="text-sm">راكب #{reservation.priority}</span>
+                    <span className="text-sm">{t('passenger')} #{reservation.priority}</span>
                   </div>
                   <Badge variant="secondary" className="text-xs">
-                    أولوية {index + 1}
+                    {t('priority')} {index + 1}
                   </Badge>
                 </div>
               ))}
