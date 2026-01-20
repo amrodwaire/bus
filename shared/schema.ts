@@ -28,12 +28,22 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// Jordan Governorates
+export const jordanGovernorates = [
+  "amman", "zarqa", "irbid", "balqa", "karak", "tafilah", 
+  "maan", "aqaba", "jerash", "ajloun", "madaba", "mafraq"
+] as const;
+export type Governorate = typeof jordanGovernorates[number];
+
 // Buses table
 export const buses = pgTable("buses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   driverId: varchar("driver_id").notNull(),
   plateNumber: text("plate_number").notNull(),
   routeName: text("route_name").notNull(),
+  routeNameEn: text("route_name_en"),
+  governorate: text("governorate"),
+  destinationGovernorate: text("destination_governorate"),
   totalCapacity: integer("total_capacity").notNull().default(15),
   currentPassengers: integer("current_passengers").notNull().default(0),
   isVisible: boolean("is_visible").notNull().default(true),
@@ -45,6 +55,9 @@ export const insertBusSchema = createInsertSchema(buses).pick({
   driverId: true,
   plateNumber: true,
   routeName: true,
+  routeNameEn: true,
+  governorate: true,
+  destinationGovernorate: true,
   totalCapacity: true,
   currentPassengers: true,
   isVisible: true,
