@@ -128,6 +128,8 @@ const translations: Record<Language, Record<string, string>> = {
     
     home: "الرئيسية",
     map: "الخريطة",
+    arabic: "عربي",
+    english: "إنجليزي",
     
     // Welcome page features
     liveTracking: "تتبع مباشر",
@@ -329,6 +331,8 @@ const translations: Record<Language, Record<string, string>> = {
     
     home: "Home",
     map: "Map",
+    arabic: "Arabic",
+    english: "English",
     
     // Welcome page features
     liveTracking: "Live Tracking",

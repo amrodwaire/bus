@@ -91,13 +91,16 @@ export class MemStorage implements IStorage {
     };
     this.users.set(citizenId, citizen);
 
-    // Create demo buses
+    // Create demo buses with bilingual names and governorate info
     const bus1Id = randomUUID();
     const bus1: Bus = {
       id: bus1Id,
       driverId: driverId,
       plateNumber: "12-34567",
       routeName: "عمان - الزرقاء",
+      routeNameEn: "Amman - Zarqa",
+      governorate: "amman",
+      destinationGovernorate: "zarqa",
       totalCapacity: 15,
       currentPassengers: 8,
       isVisible: true,
@@ -112,6 +115,9 @@ export class MemStorage implements IStorage {
       driverId: randomUUID(),
       plateNumber: "23-45678",
       routeName: "عمان - إربد",
+      routeNameEn: "Amman - Irbid",
+      governorate: "amman",
+      destinationGovernorate: "irbid",
       totalCapacity: 20,
       currentPassengers: 5,
       isVisible: true,
@@ -126,6 +132,9 @@ export class MemStorage implements IStorage {
       driverId: randomUUID(),
       plateNumber: "34-56789",
       routeName: "عمان - العقبة",
+      routeNameEn: "Amman - Aqaba",
+      governorate: "amman",
+      destinationGovernorate: "aqaba",
       totalCapacity: 25,
       currentPassengers: 22,
       isVisible: true,
@@ -133,6 +142,40 @@ export class MemStorage implements IStorage {
       currentLng: 35.95
     };
     this.buses.set(bus3Id, bus3);
+
+    const bus4Id = randomUUID();
+    const bus4: Bus = {
+      id: bus4Id,
+      driverId: randomUUID(),
+      plateNumber: "45-67890",
+      routeName: "إربد - عجلون",
+      routeNameEn: "Irbid - Ajloun",
+      governorate: "irbid",
+      destinationGovernorate: "ajloun",
+      totalCapacity: 12,
+      currentPassengers: 3,
+      isVisible: true,
+      currentLat: 32.55,
+      currentLng: 35.85
+    };
+    this.buses.set(bus4Id, bus4);
+
+    const bus5Id = randomUUID();
+    const bus5: Bus = {
+      id: bus5Id,
+      driverId: randomUUID(),
+      plateNumber: "56-78901",
+      routeName: "الزرقاء - المفرق",
+      routeNameEn: "Zarqa - Mafraq",
+      governorate: "zarqa",
+      destinationGovernorate: "mafraq",
+      totalCapacity: 18,
+      currentPassengers: 10,
+      isVisible: true,
+      currentLat: 32.07,
+      currentLng: 36.1
+    };
+    this.buses.set(bus5Id, bus5);
   }
 
   // Users

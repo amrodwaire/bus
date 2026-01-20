@@ -38,15 +38,23 @@ import type { Bus as BusType, Reservation, RouteWaypoint } from "@shared/schema"
 export default function DriverDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   
   const [showBusDialog, setShowBusDialog] = useState(false);
   const [busFormData, setBusFormData] = useState({
     plateNumber: "",
     routeName: "",
+    routeNameEn: "",
+    governorate: "amman",
+    destinationGovernorate: "",
     totalCapacity: 15,
   });
+  
+  // Get route name based on language
+  const getDisplayRouteName = (bus: BusType) => {
+    return language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
+  };
 
   const { data: driverBus, isLoading: busLoading } = useQuery<BusType | null>({
     queryKey: [`/api/buses/driver/${user?.id}`],
@@ -193,14 +201,25 @@ export default function DriverDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="routeName">{t('routeName')}</Label>
+                <Label htmlFor="routeName">{t('routeName')} ({t('arabic')})</Label>
                 <Input
                   id="routeName"
-                  placeholder={t('exampleRoute')}
+                  placeholder="مثال: عمان - الزرقاء"
                   value={busFormData.routeName}
                   onChange={(e) => setBusFormData({ ...busFormData, routeName: e.target.value })}
                   data-testid="input-route-name"
                   required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="routeNameEn">{t('routeName')} ({t('english')})</Label>
+                <Input
+                  id="routeNameEn"
+                  placeholder="e.g. Amman - Zarqa"
+                  value={busFormData.routeNameEn}
+                  onChange={(e) => setBusFormData({ ...busFormData, routeNameEn: e.target.value })}
+                  data-testid="input-route-name-en"
                 />
               </div>
 
@@ -241,7 +260,7 @@ export default function DriverDashboard() {
         <div className="flex items-center justify-between p-4">
           <div>
             <h1 className="font-bold text-lg">{t('driverDashboard')}</h1>
-            <p className="text-xs text-muted-foreground">{driverBus.routeName}</p>
+            <p className="text-xs text-muted-foreground">{getDisplayRouteName(driverBus)}</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={driverBus.isVisible ? "default" : "secondary"}>
@@ -261,7 +280,7 @@ export default function DriverDashboard() {
                 <Bus className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h2 className="font-bold">{driverBus.routeName}</h2>
+                <h2 className="font-bold">{getDisplayRouteName(driverBus)}</h2>
                 <p className="text-sm text-muted-foreground">{driverBus.plateNumber}</p>
               </div>
             </div>

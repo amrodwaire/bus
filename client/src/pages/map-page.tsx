@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bus, MapPin, X, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,37 +22,43 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { apiRequest } from "@/lib/queryClient";
-import type { Bus as BusType } from "@shared/schema";
+import { detectGovernorate, getGovernorateName } from "@/lib/governorate-utils";
+import type { Bus as BusType, Governorate } from "@shared/schema";
 
 export default function MapPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   
   const [selectedBus, setSelectedBus] = useState<BusType | null>(null);
   const [showReservationDialog, setShowReservationDialog] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userGovernorate, setUserGovernorate] = useState<Governorate>("amman");
 
   // Fetch available buses
   const { data: buses = [], isLoading } = useQuery<BusType[]>({
     queryKey: ["/api/buses"],
   });
 
-  // Get user location
+  // Get user location and detect governorate
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setUserLocation({
+          const loc = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
-          });
+          };
+          setUserLocation(loc);
+          const gov = detectGovernorate(loc.lat, loc.lng);
+          if (gov) setUserGovernorate(gov);
         },
         (error) => {
           console.log("Location access denied:", error);
           // Default to Amman
           setUserLocation({ lat: 31.9539, lng: 35.9106 });
+          setUserGovernorate("amman");
         }
       );
     }
@@ -102,8 +108,27 @@ export default function MapPage() {
     }
   };
 
-  // Filter visible buses
-  const visibleBuses = buses.filter(b => b.isVisible);
+  // Filter buses by governorate - show buses in user's governorate or passing through
+  const filteredBuses = useMemo(() => {
+    return buses.filter(b => {
+      if (!b.isVisible) return false;
+      
+      // Show buses that are in user's governorate or have it as destination
+      const busGov = b.governorate as Governorate | null;
+      const destGov = b.destinationGovernorate as Governorate | null;
+      
+      // If no governorate info, show the bus (legacy data)
+      if (!busGov && !destGov) return true;
+      
+      // Show if bus origin or destination matches user's governorate
+      return busGov === userGovernorate || destGov === userGovernorate;
+    });
+  }, [buses, userGovernorate]);
+
+  // Get route name based on language
+  const getDisplayRouteName = (bus: BusType) => {
+    return language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -120,9 +145,9 @@ export default function MapPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="gap-1">
+            <Badge variant="secondary" className="gap-1" data-testid="badge-governorate">
               <MapPin className="h-3 w-3" />
-              Amman
+              {getGovernorateName(userGovernorate, language)}
             </Badge>
             <LanguageToggle />
             <ThemeToggle />
@@ -133,7 +158,7 @@ export default function MapPage() {
       {/* Map Section */}
       <section className="p-4">
         <MapView
-          buses={visibleBuses}
+          buses={filteredBuses}
           userLocation={userLocation}
           onBusClick={handleBusClick}
           selectedBusId={selectedBus?.id}
@@ -145,12 +170,12 @@ export default function MapPage() {
       <section className="px-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-lg">{t('nearbyBuses')}</h2>
-          <Badge variant="outline">{visibleBuses.length} {t('bus')}</Badge>
+          <Badge variant="outline">{filteredBuses.length} {t('bus')}</Badge>
         </div>
 
         {isLoading ? (
           <LoadingSpinner />
-        ) : visibleBuses.length === 0 ? (
+        ) : filteredBuses.length === 0 ? (
           <Card className="p-8 text-center">
             <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
               <Bus className="h-8 w-8 text-muted-foreground" />
@@ -162,7 +187,7 @@ export default function MapPage() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {visibleBuses.map((bus) => (
+            {filteredBuses.map((bus) => (
               <BusCard
                 key={bus.id}
                 bus={bus}
@@ -184,7 +209,7 @@ export default function MapPage() {
                   <Bus className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-bold">{selectedBus.routeName}</h3>
+                  <h3 className="font-bold">{getDisplayRouteName(selectedBus)}</h3>
                   <p className="text-sm text-muted-foreground">{selectedBus.plateNumber}</p>
                   <p className="text-sm mt-1">
                     {selectedBus.totalCapacity - selectedBus.currentPassengers} {t('availableSeats')}
@@ -233,7 +258,7 @@ export default function MapPage() {
                     <Bus className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-bold">{selectedBus.routeName}</h3>
+                    <h3 className="font-bold">{getDisplayRouteName(selectedBus)}</h3>
                     <p className="text-sm text-muted-foreground">{selectedBus.plateNumber}</p>
                   </div>
                 </div>

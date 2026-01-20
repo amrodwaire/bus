@@ -13,8 +13,11 @@ interface BusCardProps {
 }
 
 export function BusCard({ bus, onReserve, showReserveButton = true, compact = false }: BusCardProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const availableSeats = bus.totalCapacity - bus.currentPassengers;
+  
+  // Get route name based on current language
+  const displayRouteName = language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
   const isFull = availableSeats <= 0;
   const isAlmostFull = availableSeats <= 3 && availableSeats > 0;
 
@@ -37,7 +40,7 @@ export function BusCard({ bus, onReserve, showReserveButton = true, compact = fa
               <Bus className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="font-semibold text-sm">{bus.routeName}</p>
+              <p className="font-semibold text-sm">{displayRouteName}</p>
               <p className="text-xs text-muted-foreground">{bus.plateNumber}</p>
             </div>
           </div>
@@ -62,7 +65,7 @@ export function BusCard({ bus, onReserve, showReserveButton = true, compact = fa
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-bold text-lg">{bus.routeName}</h3>
+              <h3 className="font-bold text-lg">{displayRouteName}</h3>
               {getStatusBadge()}
             </div>
             <p className="text-sm text-muted-foreground">{bus.plateNumber}</p>
