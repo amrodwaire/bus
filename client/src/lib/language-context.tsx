@@ -126,6 +126,10 @@ const translations: Record<Language, Record<string, string>> = {
     enterPlateNumber: "أدخل رقم اللوحة",
     enterCapacity: "أدخل السعة",
     
+    citizen: "مواطن",
+    driver: "سائق",
+    demoAccounts: "حسابات تجريبية",
+    
     home: "الرئيسية",
     map: "الخريطة",
     arabic: "عربي",
@@ -328,6 +332,10 @@ const translations: Record<Language, Record<string, string>> = {
     enterRouteName: "Enter route name",
     enterPlateNumber: "Enter plate number",
     enterCapacity: "Enter capacity",
+    
+    citizen: "Citizen",
+    driver: "Driver",
+    demoAccounts: "Demo Accounts",
     
     home: "Home",
     map: "Map",
