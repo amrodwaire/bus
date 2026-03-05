@@ -81,6 +81,20 @@ export default function Login() {
             <p className="text-muted-foreground mt-2">{t('continueToApp')}</p>
           </div>
 
+          <div className="mb-6 p-4 bg-muted rounded-lg border border-border">
+            <p className="text-sm font-medium mb-2">{t('demoAccounts')}</p>
+            <div className="grid grid-cols-2 gap-4 text-xs text-left rtl:text-right">
+              <div>
+                <p className="text-muted-foreground">{t('citizen')}:</p>
+                <p className="font-mono font-bold">user1 / 123456</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">{t('driver')}:</p>
+                <p className="font-mono font-bold">driver1 / 123456</p>
+              </div>
+            </div>
+          </div>
+
           <Card className="p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
