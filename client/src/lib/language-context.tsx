@@ -252,6 +252,7 @@ const translations: Record<Language, Record<string, string>> = {
     toPointTooCloseDesc: "يجب أن تكون نقطة الوجهة على بعد أكثر من 300 متر من نقطة الانطلاق — اختر موقعاً أبعد",
     routeRequiredTitle: "حدد مسارك أولاً",
     routeRequiredDesc: "لازم تحدد نقطة البداية والوجهة على الخريطة قبل الحجز — اضغط على زر المسار لتحديدهما",
+    yourPickupPoint: "نقطة التقاطك",
 
     // Driver waypoints
     stop: "محطة",
@@ -509,6 +510,7 @@ const translations: Record<Language, Record<string, string>> = {
     toPointTooCloseDesc: "Your destination must be more than 300 meters from your departure point — pick a location further away",
     routeRequiredTitle: "Set your route first",
     routeRequiredDesc: "You must set your departure and destination on the map before reserving a seat — tap the route button to get started",
+    yourPickupPoint: "Your Pickup Point",
 
     // Driver waypoints
     stop: "Stop",

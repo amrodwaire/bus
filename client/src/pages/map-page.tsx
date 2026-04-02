@@ -15,7 +15,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/language-context";
-import { MapView } from "@/components/map-view";
+import { MapView, type PassengerPickup } from "@/components/map-view";
 import { BusCard } from "@/components/bus-card";
 import { BottomNav } from "@/components/bottom-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -278,6 +278,15 @@ export default function MapPage() {
     return language === "en" ? entry.en : entry.ar;
   };
 
+  const citizenPickupMarker: PassengerPickup[] = hasActiveReservation && activeReservation?.pickupLat
+    ? [{
+        lat: activeReservation.pickupLat,
+        lng: activeReservation.pickupLng,
+        priority: 1,
+        name: t('yourPickupPoint'),
+      }]
+    : [];
+
   const routeLabel = routeIsSet && fromPoint && toPoint
     ? `${getGovLabel(fromPoint.gov)} → ${getGovLabel(toPoint.gov)}`
     : null;
@@ -285,7 +294,7 @@ export default function MapPage() {
   return (
     <div className="min-h-screen bg-background pb-20">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
@@ -390,7 +399,7 @@ export default function MapPage() {
       )}
 
       {/* Map Section */}
-      <section className="p-4">
+      <section className="p-4 relative z-0">
         <MapView
           buses={filteredBuses}
           userLocation={userLocation}
@@ -404,6 +413,7 @@ export default function MapPage() {
           routePath={routeResult?.coordinates}
           routeDistanceKm={routeResult?.distanceKm}
           routeDurationMin={routeResult?.durationMin}
+          passengerPickups={citizenPickupMarker}
         />
       </section>
 

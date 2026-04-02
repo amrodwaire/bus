@@ -212,7 +212,7 @@ export function MapView({
 
   return (
     <div
-      className="relative rounded-xl overflow-hidden shadow-lg border border-border"
+      className="relative rounded-xl overflow-hidden shadow-lg border border-border isolate"
       style={{ height, cursor: onMapClick ? 'crosshair' : 'default' }}
     >
       <MapContainer
