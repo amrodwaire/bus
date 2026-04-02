@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bus,
@@ -85,6 +85,9 @@ export default function DriverDashboard() {
   const [routeInfo, setRouteInfo] = useState<{ distanceKm: number; durationMin: number } | null>(null);
   const [isEditingPrice, setIsEditingPrice] = useState(false);
   const [editPrice, setEditPrice] = useState("");
+  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationTracking, setLocationTracking] = useState<"off" | "active" | "denied">("off");
+  const locationUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getDisplayRouteName = (bus: BusType) => {
     return language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
@@ -128,6 +131,53 @@ export default function DriverDashboard() {
       computeRoutePath(savedWaypoints.map(wp => ({ lat: wp.lat, lng: wp.lng })));
     }
   }, [savedWaypoints]);
+
+  // GPS tracking: update bus location as driver moves
+  useEffect(() => {
+    if (!driverBus?.id) return;
+    if (!navigator.geolocation) return;
+
+    let watchId: number;
+    let lastLat: number | null = null;
+    let lastLng: number | null = null;
+
+    const sendLocation = (lat: number, lng: number) => {
+      // Only send if moved more than ~10m
+      if (
+        lastLat !== null &&
+        Math.abs(lat - lastLat) < 0.0001 &&
+        Math.abs(lng - lastLng!) < 0.0001
+      ) return;
+      lastLat = lat;
+      lastLng = lng;
+      // Silent background update — no toast, no cache invalidation
+      apiRequest("PATCH", `/api/buses/${driverBus.id}`, {
+        currentLat: lat,
+        currentLng: lng,
+      }).then(() => {
+        queryClient.invalidateQueries({ queryKey: [`/api/buses/driver/${user?.id}`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/buses"] });
+      }).catch(() => {});
+    };
+
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setDriverLocation({ lat: latitude, lng: longitude });
+        setLocationTracking("active");
+        sendLocation(latitude, longitude);
+      },
+      (err) => {
+        if (err.code === 1) setLocationTracking("denied");
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      if (locationUpdateRef.current) clearTimeout(locationUpdateRef.current);
+    };
+  }, [driverBus?.id]);
 
   const createBusMutation = useMutation({
     mutationFn: async (data: typeof busFormData) => {
@@ -480,6 +530,25 @@ export default function DriverDashboard() {
             )}
           </div>
 
+          {/* GPS tracking status */}
+          <div className="flex items-center justify-between py-3 border-t border-border">
+            <div className="flex items-center gap-2">
+              <MapPin className={`h-5 w-5 ${locationTracking === "active" ? "text-green-600" : "text-muted-foreground"}`} />
+              <span className="font-medium">{t('liveLocation')}</span>
+            </div>
+            <Badge
+              variant={locationTracking === "active" ? "default" : locationTracking === "denied" ? "destructive" : "secondary"}
+              className="text-xs"
+              data-testid="badge-gps-status"
+            >
+              {locationTracking === "active"
+                ? t('gpsActive')
+                : locationTracking === "denied"
+                  ? t('gpsDenied')
+                  : t('gpsWaiting')}
+            </Badge>
+          </div>
+
           <div className="flex items-center justify-between py-3 border-t border-border">
             <div className="flex items-center gap-2">
               {driverBus.isVisible ? (
@@ -610,8 +679,9 @@ export default function DriverDashboard() {
             routePath={driverRoutePath}
             routeDistanceKm={routeInfo?.distanceKm}
             routeDurationMin={routeInfo?.durationMin}
+            userLocation={driverLocation}
             height="300px"
-            showUserLocation={false}
+            showUserLocation={!!driverLocation}
             showHiddenBuses
             onMapClick={isEditingRoute ? handleMapClick : undefined}
             passengerPickups={!isEditingRoute ? passengerPickups : undefined}
