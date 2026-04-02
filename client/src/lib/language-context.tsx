@@ -243,6 +243,7 @@ const translations: Record<Language, Record<string, string>> = {
     tapMapForEnd: "اضغط على الخريطة لتحديد وجهتك",
     km: "كم",
     min: "دقيقة",
+    passengersOnMap: "مواقع الراكبين تظهر على الخريطة بالأعلى",
 
     // Driver waypoints
     stop: "محطة",
@@ -491,6 +492,7 @@ const translations: Record<Language, Record<string, string>> = {
     tapMapForEnd: "Tap on the map to set your destination",
     km: "km",
     min: "min",
+    passengersOnMap: "Passenger pickup locations are shown on the map above",
 
     // Driver waypoints
     stop: "Stop",

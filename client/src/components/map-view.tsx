@@ -6,6 +6,14 @@ import type { Bus as BusType, RouteWaypoint } from "@shared/schema";
 import { useLanguage } from "@/lib/language-context";
 import "leaflet/dist/leaflet.css";
 
+export interface PassengerPickup {
+  lat: number;
+  lng: number;
+  priority: number;
+  name?: string | null;
+  phone?: string | null;
+}
+
 interface MapViewProps {
   buses: BusType[];
   waypoints?: RouteWaypoint[];
@@ -22,6 +30,7 @@ interface MapViewProps {
   routePath?: [number, number][];
   routeDistanceKm?: number;
   routeDurationMin?: number;
+  passengerPickups?: PassengerPickup[];
 }
 
 function MapController({ center, initialOnly }: { center: { lat: number; lng: number }; initialOnly?: boolean }) {
@@ -127,6 +136,27 @@ function createRoutePointIcon(type: "from" | "to") {
   });
 }
 
+function createPassengerPickupIcon(priority: number) {
+  return divIcon({
+    className: 'custom-passenger-marker',
+    html: `
+      <div style="position:relative;width:36px;height:44px;">
+        <svg width="36" height="44" viewBox="0 0 36 44">
+          <path d="M18 42 C18 42 34 27 34 16 C34 7 27 1 18 1 C9 1 2 7 2 16 C2 27 18 42 18 42Z"
+            fill="#f97316" stroke="white" stroke-width="2.5"/>
+          <circle cx="18" cy="15" r="7" fill="white" opacity="0.9"/>
+        </svg>
+        <div style="
+          position:absolute;top:7px;left:0;width:36px;text-align:center;
+          color:#f97316;font-size:13px;font-weight:900;
+        ">${priority}</div>
+      </div>`,
+    iconSize: [36, 44],
+    iconAnchor: [18, 44],
+    popupAnchor: [0, -44],
+  });
+}
+
 const userLocationIcon = divIcon({
   className: 'custom-user-marker',
   html: `
@@ -159,6 +189,7 @@ export function MapView({
   routePath,
   routeDistanceKm,
   routeDurationMin,
+  passengerPickups = [],
 }: MapViewProps) {
   const { t } = useLanguage();
 
@@ -261,6 +292,24 @@ export function MapView({
             }}
           />
         )}
+
+        {/* Passenger pickup markers */}
+        {passengerPickups.map((pickup, i) => (
+          <Marker
+            key={`pickup-${i}`}
+            position={[pickup.lat, pickup.lng]}
+            icon={createPassengerPickupIcon(pickup.priority)}
+          >
+            <Popup>
+              <div className="p-1 text-center min-w-[120px]">
+                <p className="font-bold text-orange-600">{t('passenger')} #{pickup.priority}</p>
+                {pickup.name && <p className="text-sm mt-0.5">{pickup.name}</p>}
+                {pickup.phone && <p className="text-xs text-gray-500 mt-0.5">{pickup.phone}</p>}
+                <p className="text-xs text-gray-400 mt-1 font-mono">{pickup.lat.toFixed(4)}, {pickup.lng.toFixed(4)}</p>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
 
         {/* Route from/to markers */}
         {routeFrom && (

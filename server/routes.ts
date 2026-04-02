@@ -213,11 +213,21 @@ export async function registerRoutes(
     }
   });
 
-  // Get bus reservations
+  // Get bus reservations (with passenger info)
   app.get("/api/reservations/bus/:busId", async (req, res) => {
     try {
       const reservations = await storage.getReservationsByBus(req.params.busId);
-      res.json(reservations);
+      const withPassengers = await Promise.all(
+        reservations.map(async (r) => {
+          const passenger = await storage.getUser(r.passengerId);
+          return {
+            ...r,
+            passengerName: passenger?.fullName ?? null,
+            passengerPhone: passenger?.phone ?? null,
+          };
+        })
+      );
+      res.json(withPassengers);
     } catch (error) {
       res.status(500).json({ message: "حدث خطأ في الخادم" });
     }

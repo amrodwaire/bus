@@ -46,9 +46,14 @@ import { BottomNav } from "@/components/bottom-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import { LoadingSpinner } from "@/components/loading-spinner";
-import { MapView } from "@/components/map-view";
+import { MapView, type PassengerPickup } from "@/components/map-view";
 import { apiRequest } from "@/lib/queryClient";
 import type { Bus as BusType, Reservation, RouteWaypoint } from "@shared/schema";
+
+type ReservationWithPassenger = Reservation & {
+  passengerName?: string | null;
+  passengerPhone?: string | null;
+};
 
 interface TempWaypoint {
   lat: number;
@@ -84,9 +89,10 @@ export default function DriverDashboard() {
     enabled: !!user?.id,
   });
 
-  const { data: reservations = [] } = useQuery<Reservation[]>({
+  const { data: reservations = [] } = useQuery<ReservationWithPassenger[]>({
     queryKey: [`/api/reservations/bus/${driverBus?.id}`],
     enabled: !!driverBus?.id,
+    refetchInterval: 10000,
   });
 
   const { data: savedWaypoints = [] } = useQuery<RouteWaypoint[]>({
@@ -189,6 +195,16 @@ export default function DriverDashboard() {
 
   const availableSeats = driverBus ? driverBus.totalCapacity - driverBus.currentPassengers : 0;
   const pendingReservations = reservations.filter(r => r.status === "pending" || r.status === "confirmed");
+
+  const passengerPickups: PassengerPickup[] = pendingReservations
+    .sort((a, b) => a.priority - b.priority)
+    .map(r => ({
+      lat: r.pickupLat,
+      lng: r.pickupLng,
+      priority: r.priority,
+      name: r.passengerName,
+      phone: r.passengerPhone,
+    }));
 
   const BusCreationDialog = () => (
     <Dialog open={showBusDialog} onOpenChange={setShowBusDialog}>
@@ -522,9 +538,10 @@ export default function DriverDashboard() {
             buses={[driverBus]}
             editableWaypoints={isEditingRoute ? tempWaypoints : undefined}
             waypoints={isEditingRoute ? [] : savedWaypoints}
-            height="200px"
+            height="240px"
             showUserLocation={false}
             onMapClick={isEditingRoute ? handleMapClick : undefined}
+            passengerPickups={!isEditingRoute ? passengerPickups : undefined}
           />
 
           {/* Waypoints list */}
@@ -584,7 +601,7 @@ export default function DriverDashboard() {
           )}
         </Card>
 
-        {/* Reservations */}
+        {/* Reservations — passenger pickup list */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold flex items-center gap-2">
@@ -598,22 +615,41 @@ export default function DriverDashboard() {
             <p className="text-center text-muted-foreground py-4">{t('noCurrentReservations')}</p>
           ) : (
             <div className="space-y-2">
-              {pendingReservations.slice(0, 5).map((reservation, index) => (
-                <div
-                  key={reservation.id}
-                  className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User className="h-4 w-4 text-primary" />
+              {pendingReservations
+                .sort((a, b) => a.priority - b.priority)
+                .map((reservation) => (
+                  <div
+                    key={reservation.id}
+                    className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
+                    data-testid={`card-reservation-${reservation.id}`}
+                  >
+                    <div className="w-9 h-9 rounded-full bg-orange-100 dark:bg-orange-950/40 border-2 border-orange-400 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{reservation.priority}</span>
                     </div>
-                    <span className="text-sm">{t('passenger')} #{reservation.priority}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">
+                        {reservation.passengerName ?? `${t('passenger')} #${reservation.priority}`}
+                      </p>
+                      {reservation.passengerPhone && (
+                        <p className="text-xs text-muted-foreground">{reservation.passengerPhone}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                        📍 {reservation.pickupLat.toFixed(4)}, {reservation.pickupLng.toFixed(4)}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="text-xs flex-shrink-0 border-orange-300 text-orange-600 dark:text-orange-400"
+                    >
+                      {t('priority')} {reservation.priority}
+                    </Badge>
                   </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {t('priority')} {index + 1}
-                  </Badge>
-                </div>
-              ))}
+                ))}
+              {pendingReservations.length > 0 && (
+                <p className="text-xs text-center text-muted-foreground pt-1">
+                  {t('passengersOnMap')}
+                </p>
+              )}
             </div>
           )}
         </Card>
