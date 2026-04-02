@@ -196,20 +196,24 @@ export default function MapPage() {
 
         const busGov = b.governorate as Governorate | null;
         const destGov = b.destinationGovernorate as Governorate | null;
-        const govMatch =
-          (busGov === fromPoint.gov || busGov === toPoint.gov) ||
-          (destGov === fromPoint.gov || destGov === toPoint.gov);
 
-        if (!govMatch) {
-          if (routeResult) {
-            if (!isNearRoute({ lat: busLat, lng: busLng }, routeResult.coordinates, 3000)) {
-              return false;
-            }
-          } else {
-            return false;
-          }
+        // Primary filter: bus destination must match the user's destination governorate
+        const headingToDestination = destGov === toPoint.gov;
+
+        // Secondary filter: bus starts from the user's departure governorate and heads toward destination
+        const onSameCorridor = busGov === fromPoint.gov && destGov === toPoint.gov;
+
+        // Fallback: if no governorate info, check physical proximity to the route path
+        const nearRouteFallback =
+          !destGov &&
+          routeResult &&
+          isNearRoute({ lat: busLat, lng: busLng }, routeResult.coordinates, 3000);
+
+        if (!headingToDestination && !onSameCorridor && !nearRouteFallback) {
+          return false;
         }
 
+        // Hide buses that have already passed the user
         if (userLocation && hasBusPassed(
           { lat: busLat, lng: busLng },
           userLocation,
@@ -222,6 +226,7 @@ export default function MapPage() {
         return true;
       }
 
+      // No route set: show buses in user's governorate only
       const busGov = b.governorate as Governorate | null;
       const destGov = b.destinationGovernorate as Governorate | null;
       if (!busGov && !destGov) return true;
