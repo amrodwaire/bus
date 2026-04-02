@@ -31,6 +31,7 @@ interface MapViewProps {
   routeDistanceKm?: number;
   routeDurationMin?: number;
   passengerPickups?: PassengerPickup[];
+  reservedBusId?: string | null;
 }
 
 function MapController({ center, initialOnly }: { center: { lat: number; lng: number }; initialOnly?: boolean }) {
@@ -136,6 +137,36 @@ function createRoutePointIcon(type: "from" | "to") {
   });
 }
 
+function createReservedBusIcon(availableSeats: number) {
+  const bgColor = availableSeats === 0 ? '#ef4444' : availableSeats <= 3 ? '#eab308' : '#22c55e';
+  return divIcon({
+    className: 'custom-bus-reserved-marker',
+    html: `
+      <div style="position:relative;width:56px;height:56px;">
+        <div style="
+          width:56px;height:56px;background:${bgColor};border-radius:10px;
+          display:flex;align-items:center;justify-content:center;
+          box-shadow:0 0 0 4px rgba(99,102,241,0.6),0 0 0 8px rgba(99,102,241,0.2),0 4px 8px rgba(0,0,0,0.35);
+        ">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/>
+            <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/>
+            <circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/>
+          </svg>
+        </div>
+        <div style="
+          position:absolute;top:-10px;right:-10px;width:22px;height:22px;
+          background:#6366f1;border-radius:50%;display:flex;align-items:center;
+          justify-content:center;font-size:13px;border:2px solid white;
+          box-shadow:0 2px 4px rgba(0,0,0,0.3);
+        ">✓</div>
+      </div>`,
+    iconSize: [56, 56],
+    iconAnchor: [28, 56],
+    popupAnchor: [0, -56],
+  });
+}
+
 function createPassengerPickupIcon(priority: number) {
   return divIcon({
     className: 'custom-passenger-marker',
@@ -190,6 +221,7 @@ export function MapView({
   routeDistanceKm,
   routeDurationMin,
   passengerPickups = [],
+  reservedBusId = null,
 }: MapViewProps) {
   const { t } = useLanguage();
 
@@ -326,15 +358,25 @@ export function MapView({
         {visibleBuses.map((bus) => {
           const availableSeats = bus.totalCapacity - bus.currentPassengers;
           const isSelected = selectedBusId === bus.id;
+          const isReserved = reservedBusId === bus.id;
           return (
             <Marker
               key={bus.id}
               position={[bus.currentLat!, bus.currentLng!]}
-              icon={createBusIcon(availableSeats, isSelected)}
+              icon={isReserved
+                ? createReservedBusIcon(availableSeats)
+                : createBusIcon(availableSeats, isSelected)
+              }
               eventHandlers={{ click: () => onBusClick?.(bus) }}
+              zIndexOffset={isReserved ? 1000 : 0}
             >
               <Popup>
-                <div className="text-center p-2">
+                <div className="text-center p-2 min-w-[140px]">
+                  {isReserved && (
+                    <div className="text-xs font-bold text-indigo-600 bg-indigo-50 rounded px-2 py-1 mb-2">
+                      ✓ {t('yourReservedBus')}
+                    </div>
+                  )}
                   <h3 className="font-bold text-base">{bus.routeName}</h3>
                   <p className="text-sm text-gray-600">{bus.plateNumber}</p>
                   <p className="text-sm mt-1">{availableSeats} {t('availableSeats')}</p>

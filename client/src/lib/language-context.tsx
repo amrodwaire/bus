@@ -156,8 +156,6 @@ const translations: Record<Language, Record<string, string>> = {
     reservationCancelled: "تم إلغاء الحجز",
     reservationCancelledDesc: "تم إلغاء حجزك بنجاح",
     cancelFailed: "فشل في إلغاء الحجز",
-    processing: "جاري التنفيذ...",
-    error: "خطأ",
     noActiveReservationsShort: "لا توجد حجوزات نشطة",
     noCompletedReservations: "لا توجد حجوزات مكتملة",
     noCancelledReservations: "لا توجد حجوزات ملغية",
@@ -253,6 +251,7 @@ const translations: Record<Language, Record<string, string>> = {
     routeRequiredTitle: "حدد مسارك أولاً",
     routeRequiredDesc: "لازم تحدد نقطة البداية والوجهة على الخريطة قبل الحجز — اضغط على زر المسار لتحديدهما",
     yourPickupPoint: "نقطة التقاطك",
+    yourReservedBus: "باصك المحجوز",
 
     // Driver waypoints
     stop: "محطة",
@@ -418,8 +417,6 @@ const translations: Record<Language, Record<string, string>> = {
     reservationCancelled: "Reservation Cancelled",
     reservationCancelledDesc: "Your reservation has been cancelled successfully",
     cancelFailed: "Failed to cancel reservation",
-    processing: "Processing...",
-    error: "Error",
     noActiveReservationsShort: "No active reservations",
     noCompletedReservations: "No completed reservations",
     noCancelledReservations: "No cancelled reservations",
@@ -511,6 +508,7 @@ const translations: Record<Language, Record<string, string>> = {
     routeRequiredTitle: "Set your route first",
     routeRequiredDesc: "You must set your departure and destination on the map before reserving a seat — tap the route button to get started",
     yourPickupPoint: "Your Pickup Point",
+    yourReservedBus: "Your Reserved Bus",
 
     // Driver waypoints
     stop: "Stop",

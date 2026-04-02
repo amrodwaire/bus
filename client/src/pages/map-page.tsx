@@ -401,7 +401,14 @@ export default function MapPage() {
       {/* Map Section */}
       <section className="p-4 relative z-0">
         <MapView
-          buses={filteredBuses}
+          buses={(() => {
+            // Always include the reserved bus on the map even if filtered out
+            if (!activeReservation?.busId) return filteredBuses;
+            const alreadyIncluded = filteredBuses.some(b => b.id === activeReservation.busId);
+            if (alreadyIncluded) return filteredBuses;
+            const reservedBus = buses.find(b => b.id === activeReservation.busId);
+            return reservedBus ? [...filteredBuses, reservedBus] : filteredBuses;
+          })()}
           userLocation={userLocation}
           onBusClick={routeStep === 0 ? handleBusClick : undefined}
           selectedBusId={selectedBus?.id}
@@ -414,6 +421,7 @@ export default function MapPage() {
           routeDistanceKm={routeResult?.distanceKm}
           routeDurationMin={routeResult?.durationMin}
           passengerPickups={citizenPickupMarker}
+          reservedBusId={activeReservation?.busId}
         />
       </section>
 
