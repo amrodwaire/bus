@@ -61,20 +61,25 @@ export default function MapPage() {
   const hasActiveReservation = !!activeReservation;
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
-          setUserLocation(loc);
-          const gov = detectGovernorate(loc.lat, loc.lng);
-          if (gov) setUserGovernorate(gov);
-        },
-        () => {
-          setUserLocation({ lat: 31.9539, lng: 35.9106 });
-          setUserGovernorate("amman");
-        }
-      );
+    if (!navigator.geolocation) {
+      setUserLocation({ lat: 31.9539, lng: 35.9106 });
+      setUserGovernorate("amman");
+      return;
     }
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserLocation(loc);
+        const gov = detectGovernorate(loc.lat, loc.lng);
+        if (gov) setUserGovernorate(gov);
+      },
+      () => {
+        setUserLocation({ lat: 31.9539, lng: 35.9106 });
+        setUserGovernorate("amman");
+      },
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   const reserveMutation = useMutation({
@@ -279,7 +284,7 @@ export default function MapPage() {
           userLocation={userLocation}
           onBusClick={routeStep === 0 ? handleBusClick : undefined}
           selectedBusId={selectedBus?.id}
-          height="280px"
+          height="350px"
           onMapClick={routeStep > 0 ? handleMapClick : undefined}
           routeFrom={fromPoint ?? undefined}
           routeTo={toPoint ?? undefined}

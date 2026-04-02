@@ -1,6 +1,6 @@
-import { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
-import { divIcon } from "leaflet";
+import { useEffect, useRef } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap, useMapEvents } from "react-leaflet";
+import { divIcon, latLngBounds } from "leaflet";
 import { Bus } from "lucide-react";
 import type { Bus as BusType, RouteWaypoint } from "@shared/schema";
 import { useLanguage } from "@/lib/language-context";
@@ -21,11 +21,26 @@ interface MapViewProps {
   routeMode?: "from" | "to";
 }
 
-function MapController({ center }: { center: { lat: number; lng: number } }) {
+function MapController({ center, initialOnly }: { center: { lat: number; lng: number }; initialOnly?: boolean }) {
   const map = useMap();
+  const hasCentered = useRef(false);
   useEffect(() => {
+    if (initialOnly && hasCentered.current) return;
     map.setView([center.lat, center.lng], map.getZoom());
-  }, [center, map]);
+    hasCentered.current = true;
+  }, [center, map, initialOnly]);
+  return null;
+}
+
+function FitRouteBounds({ from, to }: { from: { lat: number; lng: number }; to: { lat: number; lng: number } }) {
+  const map = useMap();
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (fitted.current) return;
+    const bounds = latLngBounds([from.lat, from.lng], [to.lat, to.lng]);
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
+    fitted.current = true;
+  }, [from, to, map]);
   return null;
 }
 
@@ -39,12 +54,7 @@ function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number
 }
 
 function createBusIcon(availableSeats: number, isSelected: boolean) {
-  const bgColor = availableSeats === 0
-    ? '#ef4444'
-    : availableSeats <= 3
-      ? '#eab308'
-      : '#22c55e';
-
+  const bgColor = availableSeats === 0 ? '#ef4444' : availableSeats <= 3 ? '#eab308' : '#22c55e';
   return divIcon({
     className: 'custom-bus-marker',
     html: `
@@ -96,51 +106,38 @@ function createRoutePointIcon(type: "from" | "to") {
   return divIcon({
     className: `custom-route-${type}-marker`,
     html: `
-      <div style="position:relative;width:36px;height:44px;">
+      <div style="position:relative;width:40px;height:52px;">
+        <svg width="40" height="52" viewBox="0 0 40 52">
+          <path d="M20 50 C20 50 38 30 38 18 C38 8 30 1 20 1 C10 1 2 8 2 18 C2 30 20 50 20 50Z"
+            fill="${bgColor}" stroke="white" stroke-width="2.5"/>
+          <circle cx="20" cy="18" r="11" fill="white" opacity="0.3"/>
+        </svg>
         <div style="
-          width:36px;height:36px;
-          background:${bgColor};
-          border-radius:50% 50% 50% 0;
-          transform:rotate(-45deg);
-          border:3px solid white;
-          box-shadow:0 3px 8px rgba(0,0,0,0.4);
-        "></div>
-        <div style="
-          position:absolute;top:5px;left:0;width:36px;text-align:center;
-          color:white;font-size:15px;font-weight:bold;
-          text-shadow:0 1px 2px rgba(0,0,0,0.3);
+          position:absolute;top:6px;left:0;width:40px;text-align:center;
+          color:white;font-size:18px;font-weight:900;
+          text-shadow:0 1px 3px rgba(0,0,0,0.4);
         ">${letter}</div>
       </div>`,
-    iconSize: [36, 44],
-    iconAnchor: [18, 44],
-    popupAnchor: [0, -44],
+    iconSize: [40, 52],
+    iconAnchor: [20, 52],
+    popupAnchor: [0, -52],
   });
 }
 
 const userLocationIcon = divIcon({
   className: 'custom-user-marker',
   html: `
-    <div style="position:relative;">
+    <div style="position:relative;width:22px;height:22px;">
       <div style="
-        position:absolute;top:50%;left:50%;
-        transform:translate(-50%,-50%);
-        width:40px;height:40px;
-        background:rgba(59,130,246,0.3);border-radius:50%;
-        animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;
+        width:22px;height:22px;
+        background:#4285F4;
+        border-radius:50%;
+        border:3px solid white;
+        box-shadow:0 1px 4px rgba(0,0,0,0.4);
       "></div>
-      <div style="
-        width:32px;height:32px;background:#3b82f6;border-radius:50%;
-        border:4px solid white;box-shadow:0 4px 6px rgba(0,0,0,0.3);
-        display:flex;align-items:center;justify-content:center;
-      ">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="3 11 22 2 13 21 11 13 3 11"/>
-        </svg>
-      </div>
-    </div>
-    <style>@keyframes ping{75%,100%{transform:translate(-50%,-50%) scale(2);opacity:0;}}</style>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+    </div>`,
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
 });
 
 export function MapView({
@@ -174,14 +171,16 @@ export function MapView({
         ? t('clickMapToAddStop')
         : null;
 
+  const hasBothRoutePoints = routeFrom && routeTo;
+
   return (
     <div
-      className="relative rounded-lg overflow-hidden shadow-md"
+      className="relative rounded-xl overflow-hidden shadow-lg border border-border"
       style={{ height, cursor: onMapClick ? 'crosshair' : 'default' }}
     >
       <MapContainer
         center={[center.lat, center.lng]}
-        zoom={13}
+        zoom={14}
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
       >
@@ -190,13 +189,50 @@ export function MapView({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <MapController center={center} />
+        {hasBothRoutePoints ? (
+          <FitRouteBounds from={routeFrom} to={routeTo} />
+        ) : (
+          <MapController center={center} initialOnly />
+        )}
+
         {onMapClick && <MapClickHandler onMapClick={onMapClick} />}
 
+        {/* User location: pulsating blue ring + solid dot */}
         {showUserLocation && userLocation && (
-          <Marker position={[userLocation.lat, userLocation.lng]} icon={userLocationIcon}>
-            <Popup>{t('yourLocation')}</Popup>
-          </Marker>
+          <>
+            <Circle
+              center={[userLocation.lat, userLocation.lng]}
+              radius={50}
+              pathOptions={{
+                fillColor: '#4285F4',
+                fillOpacity: 0.1,
+                color: '#4285F4',
+                weight: 1,
+                opacity: 0.3,
+              }}
+            />
+            <Marker position={[userLocation.lat, userLocation.lng]} icon={userLocationIcon}>
+              <Popup>
+                <div className="text-center font-medium text-sm">{t('yourLocation')}</div>
+              </Popup>
+            </Marker>
+          </>
+        )}
+
+        {/* Dashed polyline between from → to */}
+        {hasBothRoutePoints && (
+          <Polyline
+            positions={[
+              [routeFrom.lat, routeFrom.lng],
+              [routeTo.lat, routeTo.lng],
+            ]}
+            pathOptions={{
+              color: '#4285F4',
+              weight: 4,
+              opacity: 0.8,
+              dashArray: '12, 8',
+            }}
+          />
         )}
 
         {/* Route from/to markers */}
@@ -251,11 +287,19 @@ export function MapView({
             </Popup>
           </Marker>
         ))}
+        {showUserLocation && userLocation && !onMapClick && (
+          <RecenterButton userLocation={userLocation} />
+        )}
       </MapContainer>
 
+      {/* Instruction label overlay */}
       {routeMapLabel && (
-        <div className={`absolute top-2 left-2 z-[1000] text-white text-xs px-2 py-1 rounded-md shadow ${
-          routeMode === "from" ? "bg-green-600" : routeMode === "to" ? "bg-red-500" : "bg-indigo-600"
+        <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-[1000] text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg backdrop-blur-sm ${
+          routeMode === "from"
+            ? "bg-green-600/90"
+            : routeMode === "to"
+              ? "bg-red-500/90"
+              : "bg-indigo-600/90"
         }`}>
           {routeMapLabel}
         </div>
@@ -271,5 +315,22 @@ export function MapView({
         </div>
       )}
     </div>
+  );
+}
+
+function RecenterButton({ userLocation }: { userLocation: { lat: number; lng: number } }) {
+  const map = useMap();
+  return (
+    <button
+      onClick={() => map.setView([userLocation.lat, userLocation.lng], 15, { animate: true })}
+      className="absolute bottom-3 right-3 z-[1000] w-10 h-10 bg-white dark:bg-zinc-800 rounded-full shadow-lg border border-border flex items-center justify-center hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors"
+      data-testid="button-recenter-map"
+      title="My location"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+      </svg>
+    </button>
   );
 }
