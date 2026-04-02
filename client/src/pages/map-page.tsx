@@ -111,7 +111,18 @@ export default function MapPage() {
   });
 
   const handleBusClick = (bus: BusType) => { setSelectedBus(bus); };
-  const handleReserve = (bus: BusType) => { setSelectedBus(bus); setShowReservationDialog(true); };
+  const handleReserve = (bus: BusType) => {
+    if (!fromPoint || !toPoint) {
+      toast({
+        title: t('routeRequiredTitle'),
+        description: t('routeRequiredDesc'),
+        variant: "destructive",
+      });
+      return;
+    }
+    setSelectedBus(bus);
+    setShowReservationDialog(true);
+  };
   const confirmReservation = () => { if (selectedBus && user) reserveMutation.mutate(selectedBus.id); };
 
   // Handle map click for route selection
