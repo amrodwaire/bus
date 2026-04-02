@@ -106,7 +106,8 @@ export class MemStorage implements IStorage {
       currentPassengers: 8,
       isVisible: true,
       currentLat: 31.9539,
-      currentLng: 35.9106
+      currentLng: 35.9106,
+      price: 0.5
     };
     this.buses.set(bus1Id, bus1);
 
@@ -123,7 +124,8 @@ export class MemStorage implements IStorage {
       currentPassengers: 5,
       isVisible: true,
       currentLat: 32.0,
-      currentLng: 35.85
+      currentLng: 35.85,
+      price: 1.25
     };
     this.buses.set(bus2Id, bus2);
 
@@ -140,7 +142,8 @@ export class MemStorage implements IStorage {
       currentPassengers: 22,
       isVisible: true,
       currentLat: 31.85,
-      currentLng: 35.95
+      currentLng: 35.95,
+      price: 3.0
     };
     this.buses.set(bus3Id, bus3);
 
@@ -157,7 +160,8 @@ export class MemStorage implements IStorage {
       currentPassengers: 3,
       isVisible: true,
       currentLat: 32.55,
-      currentLng: 35.85
+      currentLng: 35.85,
+      price: 0.75
     };
     this.buses.set(bus4Id, bus4);
 
@@ -174,7 +178,8 @@ export class MemStorage implements IStorage {
       currentPassengers: 10,
       isVisible: true,
       currentLat: 32.07,
-      currentLng: 36.1
+      currentLng: 36.1,
+      price: 1.0
     };
     this.buses.set(bus5Id, bus5);
   }

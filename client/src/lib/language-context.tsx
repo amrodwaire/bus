@@ -223,6 +223,36 @@ const translations: Record<Language, Record<string, string>> = {
     selectGovernorate: "اختر المحافظة",
     originGovernorate: "محافظة الانطلاق",
     destinationGovernorate: "محافظة الوجهة",
+
+    // Price
+    jd: "د.أ",
+    free: "مجاني",
+    seatPrice: "سعر المقعد",
+
+    // Citizen route selector
+    setTripRoute: "حدد مسار رحلتك",
+    from: "من",
+    to: "إلى",
+    setRoute: "حدد المسار",
+    clearRoute: "مسح المسار",
+    tripRouteSet: "تم تحديد مسارك",
+    showingBusesOn: "عرض باصات المسار",
+    noBusesOnRoute: "لا توجد باصات على هذا المسار",
+    noBusesOnRouteDesc: "جرب مساراً مختلفاً أو امسح الفلتر لرؤية جميع الباصات",
+
+    // Driver waypoints
+    stop: "محطة",
+    clickMapToAddStop: "اضغط على الخريطة لإضافة محطة",
+    editRoute: "تعديل المسار",
+    doneEditing: "تم",
+    saveRoute: "حفظ المسار",
+    clearStops: "مسح كل المحطات",
+    routeSaved: "تم حفظ المسار",
+    stopsAdded: "محطات مضافة",
+    noStopsYet: "لم يتم إضافة محطات بعد",
+    addStopsHint: "فعّل وضع التعديل ثم اضغط على الخريطة لإضافة محطات",
+    stops: "محطات",
+    removeStop: "إزالة",
   },
   en: {
     appName: "Coster",
@@ -437,6 +467,36 @@ const translations: Record<Language, Record<string, string>> = {
     chooseUsername: "Choose a username",
     atLeast6Chars: "At least 6 characters",
     reenterPassword: "Re-enter password",
+
+    // Price
+    jd: "JD",
+    free: "Free",
+    seatPrice: "Seat Price",
+
+    // Citizen route selector
+    setTripRoute: "Set Your Trip Route",
+    from: "From",
+    to: "To",
+    setRoute: "Set Route",
+    clearRoute: "Clear Route",
+    tripRouteSet: "Route set",
+    showingBusesOn: "Showing buses on route",
+    noBusesOnRoute: "No buses on this route",
+    noBusesOnRouteDesc: "Try a different route or clear the filter to see all buses",
+
+    // Driver waypoints
+    stop: "Stop",
+    clickMapToAddStop: "Click map to add a stop",
+    editRoute: "Edit Route",
+    doneEditing: "Done",
+    saveRoute: "Save Route",
+    clearStops: "Clear All Stops",
+    routeSaved: "Route Saved",
+    stopsAdded: "stops added",
+    noStopsYet: "No stops added yet",
+    addStopsHint: "Enable edit mode and click on the map to add stops",
+    stops: "stops",
+    removeStop: "Remove",
   },
 };
 

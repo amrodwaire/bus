@@ -117,7 +117,7 @@ export async function registerRoutes(
       }
       
       // Only allow specific fields to be updated
-      const allowedFields = ["currentPassengers", "isVisible", "currentLat", "currentLng", "routeName"];
+      const allowedFields = ["currentPassengers", "isVisible", "currentLat", "currentLng", "routeName", "price"];
       const updates: Record<string, any> = {};
       
       for (const field of allowedFields) {

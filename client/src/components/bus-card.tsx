@@ -1,4 +1,4 @@
-import { Bus, Users, MapPin } from "lucide-react";
+import { Bus, Users, MapPin, Banknote } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,8 +16,7 @@ interface BusCardProps {
 export function BusCard({ bus, onReserve, showReserveButton = true, compact = false, hasActiveReservation = false }: BusCardProps) {
   const { t, language } = useLanguage();
   const availableSeats = bus.totalCapacity - bus.currentPassengers;
-  
-  // Get route name based on current language
+
   const displayRouteName = language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
   const isFull = availableSeats <= 0;
   const isAlmostFull = availableSeats <= 3 && availableSeats > 0;
@@ -31,6 +30,10 @@ export function BusCard({ bus, onReserve, showReserveButton = true, compact = fa
     }
     return <Badge variant="default">{t('available')}</Badge>;
   };
+
+  const priceLabel = bus.price != null
+    ? `${bus.price} ${t('jd')}`
+    : t('free');
 
   if (compact) {
     return (
@@ -70,10 +73,14 @@ export function BusCard({ bus, onReserve, showReserveButton = true, compact = fa
               {getStatusBadge()}
             </div>
             <p className="text-sm text-muted-foreground">{bus.plateNumber}</p>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2 flex-wrap">
               <div className="flex items-center gap-1">
                 <Users className="h-4 w-4" />
                 <span>{availableSeats} {t('availableSeats')}</span>
+              </div>
+              <div className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+                <Banknote className="h-4 w-4" />
+                <span data-testid={`text-price-${bus.id}`}>{priceLabel}</span>
               </div>
               {bus.currentLat && bus.currentLng && (
                 <div className="flex items-center gap-1">
@@ -84,7 +91,7 @@ export function BusCard({ bus, onReserve, showReserveButton = true, compact = fa
             </div>
           </div>
         </div>
-        
+
         {showReserveButton && !isFull && onReserve && (
           <div className="flex flex-col items-end gap-1">
             <Button

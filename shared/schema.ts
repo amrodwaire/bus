@@ -49,6 +49,7 @@ export const buses = pgTable("buses", {
   isVisible: boolean("is_visible").notNull().default(true),
   currentLat: real("current_lat"),
   currentLng: real("current_lng"),
+  price: real("price"),
 });
 
 export const insertBusSchema = createInsertSchema(buses).pick({
@@ -63,6 +64,7 @@ export const insertBusSchema = createInsertSchema(buses).pick({
   isVisible: true,
   currentLat: true,
   currentLng: true,
+  price: true,
 });
 
 export type InsertBus = z.infer<typeof insertBusSchema>;

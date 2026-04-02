@@ -1,14 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  Bus, 
-  Users, 
-  Eye, 
-  EyeOff, 
-  Plus, 
-  Minus, 
+import {
+  Bus,
+  Users,
+  Eye,
+  EyeOff,
+  Plus,
+  Minus,
   Route,
-  User
+  User,
+  MapPin,
+  Save,
+  Trash2,
+  Pencil,
+  Banknote,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -44,12 +50,17 @@ import { MapView } from "@/components/map-view";
 import { apiRequest } from "@/lib/queryClient";
 import type { Bus as BusType, Reservation, RouteWaypoint } from "@shared/schema";
 
+interface TempWaypoint {
+  lat: number;
+  lng: number;
+}
+
 export default function DriverDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { t, language } = useLanguage();
   const queryClient = useQueryClient();
-  
+
   const [showBusDialog, setShowBusDialog] = useState(false);
   const [busFormData, setBusFormData] = useState({
     plateNumber: "",
@@ -58,9 +69,12 @@ export default function DriverDashboard() {
     governorate: "amman",
     destinationGovernorate: "",
     totalCapacity: 15,
+    price: "" as string | number,
   });
-  
-  // Get route name based on language
+
+  const [isEditingRoute, setIsEditingRoute] = useState(false);
+  const [tempWaypoints, setTempWaypoints] = useState<TempWaypoint[]>([]);
+
   const getDisplayRouteName = (bus: BusType) => {
     return language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
   };
@@ -75,32 +89,34 @@ export default function DriverDashboard() {
     enabled: !!driverBus?.id,
   });
 
-  const { data: waypoints = [] } = useQuery<RouteWaypoint[]>({
+  const { data: savedWaypoints = [] } = useQuery<RouteWaypoint[]>({
     queryKey: [`/api/routes/${driverBus?.id}`],
     enabled: !!driverBus?.id,
   });
 
+  useEffect(() => {
+    if (savedWaypoints.length > 0 && !isEditingRoute) {
+      setTempWaypoints(savedWaypoints.map(wp => ({ lat: wp.lat, lng: wp.lng })));
+    }
+  }, [savedWaypoints]);
+
   const createBusMutation = useMutation({
     mutationFn: async (data: typeof busFormData) => {
-      return apiRequest("POST", "/api/buses", {
+      const payload: any = {
         ...data,
         driverId: user?.id,
-      });
+        price: data.price !== "" ? parseFloat(String(data.price)) : null,
+        destinationGovernorate: data.destinationGovernorate || null,
+      };
+      return apiRequest("POST", "/api/buses", payload);
     },
     onSuccess: () => {
-      toast({
-        title: t('busCreated'),
-        description: t('registerBusDesc'),
-      });
+      toast({ title: t('busCreated'), description: t('registerBusDesc') });
       queryClient.invalidateQueries({ queryKey: [`/api/buses/driver/${user?.id}`] });
       setShowBusDialog(false);
     },
     onError: () => {
-      toast({
-        title: t('error'),
-        description: t('error'),
-        variant: "destructive",
-      });
+      toast({ title: t('error'), description: t('error'), variant: "destructive" });
     },
   });
 
@@ -113,11 +129,24 @@ export default function DriverDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/buses"] });
     },
     onError: () => {
+      toast({ title: t('error'), description: t('error'), variant: "destructive" });
+    },
+  });
+
+  const saveWaypointsMutation = useMutation({
+    mutationFn: async (waypoints: TempWaypoint[]) => {
+      return apiRequest("POST", `/api/routes/${driverBus?.id}`, { waypoints });
+    },
+    onSuccess: () => {
       toast({
-        title: t('error'),
-        description: t('error'),
-        variant: "destructive",
+        title: t('routeSaved'),
+        description: `${tempWaypoints.length} ${t('stopsAdded')}`,
       });
+      queryClient.invalidateQueries({ queryKey: [`/api/routes/${driverBus?.id}`] });
+      setIsEditingRoute(false);
+    },
+    onError: () => {
+      toast({ title: t('error'), description: t('error'), variant: "destructive" });
     },
   });
 
@@ -129,11 +158,9 @@ export default function DriverDashboard() {
 
   const handleVisibilityToggle = () => {
     if (!driverBus) return;
-    updateBusMutation.mutate({ isVisible: !driverBus.isVisible });
-    toast({
-      title: driverBus.isVisible ? t('hidden') : t('visible'),
-      description: driverBus.isVisible ? t('hidden') : t('visible'),
-    });
+    const newVisible = !driverBus.isVisible;
+    updateBusMutation.mutate({ isVisible: newVisible });
+    toast({ title: newVisible ? t('visible') : t('hidden') });
   };
 
   const handleCreateBus = (e: React.FormEvent) => {
@@ -141,8 +168,150 @@ export default function DriverDashboard() {
     createBusMutation.mutate(busFormData);
   };
 
+  const handleMapClick = (lat: number, lng: number) => {
+    if (!isEditingRoute) return;
+    setTempWaypoints(prev => [...prev, { lat, lng }]);
+  };
+
+  const handleRemoveWaypoint = (index: number) => {
+    setTempWaypoints(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleStartEditing = () => {
+    setTempWaypoints(savedWaypoints.map(wp => ({ lat: wp.lat, lng: wp.lng })));
+    setIsEditingRoute(true);
+  };
+
+  const handleCancelEditing = () => {
+    setTempWaypoints(savedWaypoints.map(wp => ({ lat: wp.lat, lng: wp.lng })));
+    setIsEditingRoute(false);
+  };
+
   const availableSeats = driverBus ? driverBus.totalCapacity - driverBus.currentPassengers : 0;
   const pendingReservations = reservations.filter(r => r.status === "pending" || r.status === "confirmed");
+
+  const BusCreationDialog = () => (
+    <Dialog open={showBusDialog} onOpenChange={setShowBusDialog}>
+      <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t('createBus')}</DialogTitle>
+          <DialogDescription>{t('enterBusDetails')}</DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleCreateBus} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="plateNumber">{t('plateNumber')}</Label>
+            <Input
+              id="plateNumber"
+              placeholder={t('examplePlate')}
+              value={busFormData.plateNumber}
+              onChange={(e) => setBusFormData({ ...busFormData, plateNumber: e.target.value })}
+              data-testid="input-plate-number"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="routeName">{t('routeName')} ({t('arabic')})</Label>
+            <Input
+              id="routeName"
+              placeholder="مثال: عمان - الزرقاء"
+              value={busFormData.routeName}
+              onChange={(e) => setBusFormData({ ...busFormData, routeName: e.target.value })}
+              data-testid="input-route-name"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="routeNameEn">{t('routeName')} ({t('english')})</Label>
+            <Input
+              id="routeNameEn"
+              placeholder="e.g. Amman - Zarqa"
+              value={busFormData.routeNameEn}
+              onChange={(e) => setBusFormData({ ...busFormData, routeNameEn: e.target.value })}
+              data-testid="input-route-name-en"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="capacity">{t('totalCapacity')}</Label>
+            <Input
+              id="capacity"
+              type="number"
+              min="1"
+              max="50"
+              value={busFormData.totalCapacity}
+              onChange={(e) => setBusFormData({ ...busFormData, totalCapacity: parseInt(e.target.value) || 15 })}
+              data-testid="input-capacity"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="price">{t('seatPrice')} ({t('jd')})</Label>
+            <Input
+              id="price"
+              type="number"
+              min="0"
+              step="0.05"
+              placeholder="0.50"
+              value={busFormData.price}
+              onChange={(e) => setBusFormData({ ...busFormData, price: e.target.value })}
+              data-testid="input-price"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>{t('originGovernorate')}</Label>
+            <Select
+              value={busFormData.governorate}
+              onValueChange={(val) => setBusFormData({ ...busFormData, governorate: val })}
+            >
+              <SelectTrigger data-testid="select-governorate">
+                <SelectValue placeholder={t('selectGovernorate')} />
+              </SelectTrigger>
+              <SelectContent>
+                {jordanGovernorates.map((gov) => (
+                  <SelectItem key={gov} value={gov}>
+                    {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>{t('destinationGovernorate')}</Label>
+            <Select
+              value={busFormData.destinationGovernorate}
+              onValueChange={(val) => setBusFormData({ ...busFormData, destinationGovernorate: val })}
+            >
+              <SelectTrigger data-testid="select-destination-governorate">
+                <SelectValue placeholder={t('selectGovernorate')} />
+              </SelectTrigger>
+              <SelectContent>
+                {jordanGovernorates.map((gov) => (
+                  <SelectItem key={gov} value={gov}>
+                    {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="submit"
+              disabled={createBusMutation.isPending}
+              data-testid="button-submit-bus"
+            >
+              {createBusMutation.isPending ? t('registering') : t('createBus')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 
   if (busLoading) {
     return (
@@ -150,10 +319,7 @@ export default function DriverDashboard() {
         <header className="sticky top-0 z-40 bg-background border-b border-border">
           <div className="flex items-center justify-between p-4">
             <h1 className="font-bold text-lg">{t('driverDashboard')}</h1>
-            <div className="flex items-center gap-2">
-              <LanguageToggle />
-              <ThemeToggle />
-            </div>
+            <div className="flex items-center gap-2"><LanguageToggle /><ThemeToggle /></div>
           </div>
         </header>
         <LoadingSpinner />
@@ -168,13 +334,9 @@ export default function DriverDashboard() {
         <header className="sticky top-0 z-40 bg-background border-b border-border">
           <div className="flex items-center justify-between p-4">
             <h1 className="font-bold text-lg">{t('driverDashboard')}</h1>
-            <div className="flex items-center gap-2">
-              <LanguageToggle />
-              <ThemeToggle />
-            </div>
+            <div className="flex items-center gap-2"><LanguageToggle /><ThemeToggle /></div>
           </div>
         </header>
-
         <div className="p-4">
           <Card className="p-8 text-center">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -188,114 +350,7 @@ export default function DriverDashboard() {
             </Button>
           </Card>
         </div>
-
-        <Dialog open={showBusDialog} onOpenChange={setShowBusDialog}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{t('createBus')}</DialogTitle>
-              <DialogDescription>{t('enterBusDetails')}</DialogDescription>
-            </DialogHeader>
-            
-            <form onSubmit={handleCreateBus} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="plateNumber">{t('plateNumber')}</Label>
-                <Input
-                  id="plateNumber"
-                  placeholder={t('examplePlate')}
-                  value={busFormData.plateNumber}
-                  onChange={(e) => setBusFormData({ ...busFormData, plateNumber: e.target.value })}
-                  data-testid="input-plate-number"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="routeName">{t('routeName')} ({t('arabic')})</Label>
-                <Input
-                  id="routeName"
-                  placeholder="مثال: عمان - الزرقاء"
-                  value={busFormData.routeName}
-                  onChange={(e) => setBusFormData({ ...busFormData, routeName: e.target.value })}
-                  data-testid="input-route-name"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="routeNameEn">{t('routeName')} ({t('english')})</Label>
-                <Input
-                  id="routeNameEn"
-                  placeholder="e.g. Amman - Zarqa"
-                  value={busFormData.routeNameEn}
-                  onChange={(e) => setBusFormData({ ...busFormData, routeNameEn: e.target.value })}
-                  data-testid="input-route-name-en"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="capacity">{t('totalCapacity')}</Label>
-                <Input
-                  id="capacity"
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={busFormData.totalCapacity}
-                  onChange={(e) => setBusFormData({ ...busFormData, totalCapacity: parseInt(e.target.value) || 15 })}
-                  data-testid="input-capacity"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>{t('originGovernorate')}</Label>
-                <Select
-                  value={busFormData.governorate}
-                  onValueChange={(val) => setBusFormData({ ...busFormData, governorate: val })}
-                >
-                  <SelectTrigger data-testid="select-governorate">
-                    <SelectValue placeholder={t('selectGovernorate')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {jordanGovernorates.map((gov) => (
-                      <SelectItem key={gov} value={gov}>
-                        {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>{t('destinationGovernorate')}</Label>
-                <Select
-                  value={busFormData.destinationGovernorate}
-                  onValueChange={(val) => setBusFormData({ ...busFormData, destinationGovernorate: val })}
-                >
-                  <SelectTrigger data-testid="select-destination-governorate">
-                    <SelectValue placeholder={t('selectGovernorate')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {jordanGovernorates.map((gov) => (
-                      <SelectItem key={gov} value={gov}>
-                        {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <DialogFooter>
-                <Button
-                  type="submit"
-                  disabled={createBusMutation.isPending}
-                  data-testid="button-submit-bus"
-                >
-                  {createBusMutation.isPending ? t('registering') : t('createBus')}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
+        <BusCreationDialog />
         <BottomNav />
       </div>
     );
@@ -320,6 +375,7 @@ export default function DriverDashboard() {
       </header>
 
       <div className="p-4 space-y-4">
+        {/* Bus Info + Visibility */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -329,10 +385,16 @@ export default function DriverDashboard() {
               <div>
                 <h2 className="font-bold">{getDisplayRouteName(driverBus)}</h2>
                 <p className="text-sm text-muted-foreground">{driverBus.plateNumber}</p>
+                {driverBus.price != null && (
+                  <p className="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-1 mt-0.5">
+                    <Banknote className="h-3.5 w-3.5" />
+                    {driverBus.price} {t('jd')}
+                  </p>
+                )}
               </div>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-between py-3 border-t border-border">
             <div className="flex items-center gap-2">
               {driverBus.isVisible ? (
@@ -350,6 +412,7 @@ export default function DriverDashboard() {
           </div>
         </Card>
 
+        {/* Passenger Count */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold flex items-center gap-2">
@@ -360,7 +423,7 @@ export default function DriverDashboard() {
               {availableSeats === 0 ? t('full') : `${availableSeats} ${t('availableSeats')}`}
             </Badge>
           </div>
-          
+
           <div className="flex items-center justify-center gap-6 py-4">
             <Button
               size="lg"
@@ -372,12 +435,12 @@ export default function DriverDashboard() {
             >
               <Minus className="h-6 w-6" />
             </Button>
-            
+
             <div className="text-center min-w-[100px]">
               <div className="text-4xl font-bold">{driverBus.currentPassengers}</div>
               <div className="text-sm text-muted-foreground">/ {driverBus.totalCapacity}</div>
             </div>
-            
+
             <Button
               size="lg"
               onClick={() => handlePassengerChange(1)}
@@ -388,15 +451,15 @@ export default function DriverDashboard() {
               <Plus className="h-6 w-6" />
             </Button>
           </div>
-          
+
           <div className="mt-4">
             <div className="h-3 bg-muted rounded-full overflow-hidden">
-              <div 
+              <div
                 className={`h-full transition-all duration-300 ${
-                  availableSeats === 0 
-                    ? 'bg-destructive' 
-                    : availableSeats <= 3 
-                      ? 'bg-yellow-500' 
+                  availableSeats === 0
+                    ? 'bg-destructive'
+                    : availableSeats <= 3
+                      ? 'bg-yellow-500'
                       : 'bg-primary'
                 }`}
                 style={{ width: `${(driverBus.currentPassengers / driverBus.totalCapacity) * 100}%` }}
@@ -405,19 +468,123 @@ export default function DriverDashboard() {
           </div>
         </Card>
 
+        {/* Route Management (Interactive Waypoints) */}
         <Card className="p-4">
-          <h3 className="font-bold flex items-center gap-2 mb-3">
-            <Route className="h-5 w-5" />
-            {t('tripRoute')}
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold flex items-center gap-2">
+              <Route className="h-5 w-5" />
+              {t('tripRoute')}
+            </h3>
+            <div className="flex items-center gap-2">
+              {!isEditingRoute ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleStartEditing}
+                  data-testid="button-edit-route"
+                >
+                  <Pencil className="h-4 w-4" />
+                  {t('editRoute')}
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCancelEditing}
+                    data-testid="button-cancel-route-edit"
+                  >
+                    <X className="h-4 w-4" />
+                    {t('cancelReservation')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => saveWaypointsMutation.mutate(tempWaypoints)}
+                    disabled={saveWaypointsMutation.isPending}
+                    data-testid="button-save-route"
+                  >
+                    <Save className="h-4 w-4" />
+                    {t('saveRoute')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {isEditingRoute && (
+            <div className="mb-3 p-2 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-lg text-sm text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+              <MapPin className="h-4 w-4 flex-shrink-0" />
+              <span>{t('clickMapToAddStop')}</span>
+            </div>
+          )}
+
           <MapView
             buses={[driverBus]}
-            waypoints={waypoints}
-            height="180px"
+            editableWaypoints={isEditingRoute ? tempWaypoints : undefined}
+            waypoints={isEditingRoute ? [] : savedWaypoints}
+            height="200px"
             showUserLocation={false}
+            onMapClick={isEditingRoute ? handleMapClick : undefined}
           />
+
+          {/* Waypoints list */}
+          {(isEditingRoute ? tempWaypoints : savedWaypoints).length > 0 ? (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">
+                {(isEditingRoute ? tempWaypoints : savedWaypoints).length} {t('stops')}
+              </p>
+              <div className="space-y-1 max-h-36 overflow-y-auto">
+                {(isEditingRoute ? tempWaypoints : (savedWaypoints as { lat: number; lng: number }[])).map((wp, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 bg-muted/50 rounded-lg text-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {index + 1}
+                      </div>
+                      <span className="text-muted-foreground text-xs font-mono">
+                        {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
+                      </span>
+                    </div>
+                    {isEditingRoute && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        onClick={() => handleRemoveWaypoint(index)}
+                        data-testid={`button-remove-waypoint-${index}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {isEditingRoute && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => setTempWaypoints([])}
+                  data-testid="button-clear-stops"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {t('clearStops')}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="mt-3 text-center py-4">
+              <p className="text-sm text-muted-foreground">{t('noStopsYet')}</p>
+              {!isEditingRoute && (
+                <p className="text-xs text-muted-foreground mt-1">{t('addStopsHint')}</p>
+              )}
+            </div>
+          )}
         </Card>
 
+        {/* Reservations */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold flex items-center gap-2">
@@ -426,13 +593,13 @@ export default function DriverDashboard() {
             </h3>
             <Badge variant="outline">{pendingReservations.length} {t('bookings')}</Badge>
           </div>
-          
+
           {pendingReservations.length === 0 ? (
             <p className="text-center text-muted-foreground py-4">{t('noCurrentReservations')}</p>
           ) : (
             <div className="space-y-2">
               {pendingReservations.slice(0, 5).map((reservation, index) => (
-                <div 
+                <div
                   key={reservation.id}
                   className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
                 >

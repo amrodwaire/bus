@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import { Icon, divIcon } from "leaflet";
-import { Bus, Navigation } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
+import { divIcon } from "leaflet";
+import { Bus, MapPin } from "lucide-react";
 import type { Bus as BusType, RouteWaypoint } from "@shared/schema";
 import { useLanguage } from "@/lib/language-context";
 import "leaflet/dist/leaflet.css";
@@ -14,6 +14,8 @@ interface MapViewProps {
   selectedBusId?: string | null;
   height?: string;
   showUserLocation?: boolean;
+  onMapClick?: (lat: number, lng: number) => void;
+  editableWaypoints?: { lat: number; lng: number }[];
 }
 
 function MapController({ center }: { center: { lat: number; lng: number } }) {
@@ -24,13 +26,22 @@ function MapController({ center }: { center: { lat: number; lng: number } }) {
   return null;
 }
 
+function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 function createBusIcon(availableSeats: number, isSelected: boolean) {
-  const bgColor = availableSeats === 0 
-    ? '#ef4444' 
-    : availableSeats <= 3 
-      ? '#eab308' 
+  const bgColor = availableSeats === 0
+    ? '#ef4444'
+    : availableSeats <= 3
+      ? '#eab308'
       : '#22c55e';
-  
+
   return divIcon({
     className: 'custom-bus-marker',
     html: `
@@ -82,6 +93,32 @@ function createBusIcon(availableSeats: number, isSelected: boolean) {
     iconSize: [48, 48],
     iconAnchor: [24, 48],
     popupAnchor: [0, -48],
+  });
+}
+
+function createWaypointIcon(index: number, isEditable: boolean) {
+  const bgColor = isEditable ? '#6366f1' : '#64748b';
+  return divIcon({
+    className: 'custom-waypoint-marker',
+    html: `
+      <div style="
+        width: 32px;
+        height: 32px;
+        background: ${bgColor};
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 13px;
+        font-weight: bold;
+        border: 3px solid white;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+      ">${index + 1}</div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -18],
   });
 }
 
@@ -137,17 +174,22 @@ export function MapView({
   selectedBusId,
   height = "400px",
   showUserLocation = true,
+  onMapClick,
+  editableWaypoints = [],
 }: MapViewProps) {
   const { t } = useLanguage();
-  
+
   const defaultCenter = { lat: 31.9539, lng: 35.9106 };
   const center = userLocation || defaultCenter;
   const visibleBuses = buses.filter(b => b.isVisible && b.currentLat && b.currentLng);
 
+  const displayWaypoints = editableWaypoints.length > 0 ? editableWaypoints : waypoints;
+  const isEditable = editableWaypoints.length > 0;
+
   return (
-    <div 
+    <div
       className="relative rounded-lg overflow-hidden shadow-md"
-      style={{ height }}
+      style={{ height, cursor: onMapClick ? 'crosshair' : 'default' }}
     >
       <MapContainer
         center={[center.lat, center.lng]}
@@ -159,12 +201,13 @@ export function MapView({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        
+
         <MapController center={center} />
+        {onMapClick && <MapClickHandler onMapClick={onMapClick} />}
 
         {showUserLocation && userLocation && (
-          <Marker 
-            position={[userLocation.lat, userLocation.lng]} 
+          <Marker
+            position={[userLocation.lat, userLocation.lng]}
             icon={userLocationIcon}
           >
             <Popup>{t('yourLocation')}</Popup>
@@ -174,7 +217,7 @@ export function MapView({
         {visibleBuses.map((bus) => {
           const availableSeats = bus.totalCapacity - bus.currentPassengers;
           const isSelected = selectedBusId === bus.id;
-          
+
           return (
             <Marker
               key={bus.id}
@@ -191,14 +234,42 @@ export function MapView({
                   <p className="text-sm mt-1">
                     {availableSeats} {t('availableSeats')}
                   </p>
+                  {bus.price != null && (
+                    <p className="text-sm font-semibold text-green-600 mt-1">
+                      {bus.price} {t('jd')}
+                    </p>
+                  )}
                 </div>
               </Popup>
             </Marker>
           );
         })}
+
+        {displayWaypoints.map((wp, index) => (
+          <Marker
+            key={`wp-${index}-${('id' in wp) ? (wp as any).id : index}`}
+            position={[wp.lat, wp.lng]}
+            icon={createWaypointIcon(index, isEditable)}
+          >
+            <Popup>
+              <div className="text-center p-1">
+                <p className="font-medium">{t('stop')} {index + 1}</p>
+                {('name' in wp) && (wp as any).name && (
+                  <p className="text-sm text-gray-600">{(wp as any).name}</p>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        ))}
       </MapContainer>
 
-      {visibleBuses.length === 0 && (
+      {onMapClick && (
+        <div className="absolute top-2 left-2 z-[1000] bg-indigo-600 text-white text-xs px-2 py-1 rounded-md shadow">
+          {t('clickMapToAddStop')}
+        </div>
+      )}
+
+      {visibleBuses.length === 0 && !onMapClick && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-[1000]">
           <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-3">
             <Bus className="h-8 w-8 text-muted-foreground" />
