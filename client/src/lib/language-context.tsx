@@ -129,6 +129,9 @@ const translations: Record<Language, Record<string, string>> = {
     citizen: "مواطن",
     driver: "سائق",
     demoAccounts: "حسابات تجريبية",
+    hasActiveReservationNotice: "لديك حجز نشط. يجب إلغاؤه أولاً قبل حجز باص آخر.",
+    hasActiveReservationShort: "لديك حجز نشط",
+    hasActiveReservationTooltip: "يجب إلغاء حجزك الحالي أولاً",
     
     home: "الرئيسية",
     map: "الخريطة",
@@ -336,6 +339,9 @@ const translations: Record<Language, Record<string, string>> = {
     citizen: "Citizen",
     driver: "Driver",
     demoAccounts: "Demo Accounts",
+    hasActiveReservationNotice: "You have an active reservation. Cancel it first before reserving another bus.",
+    hasActiveReservationShort: "You have an active reservation",
+    hasActiveReservationTooltip: "You must cancel your current reservation first",
     
     home: "Home",
     map: "Map",

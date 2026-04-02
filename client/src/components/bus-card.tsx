@@ -10,9 +10,10 @@ interface BusCardProps {
   onReserve?: (bus: BusType) => void;
   showReserveButton?: boolean;
   compact?: boolean;
+  hasActiveReservation?: boolean;
 }
 
-export function BusCard({ bus, onReserve, showReserveButton = true, compact = false }: BusCardProps) {
+export function BusCard({ bus, onReserve, showReserveButton = true, compact = false, hasActiveReservation = false }: BusCardProps) {
   const { t, language } = useLanguage();
   const availableSeats = bus.totalCapacity - bus.currentPassengers;
   
@@ -85,13 +86,23 @@ export function BusCard({ bus, onReserve, showReserveButton = true, compact = fa
         </div>
         
         {showReserveButton && !isFull && onReserve && (
-          <Button
-            onClick={() => onReserve(bus)}
-            data-testid={`button-reserve-bus-${bus.id}`}
-            className="flex-shrink-0"
-          >
-            {t('reserveSeat')}
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              onClick={() => !hasActiveReservation && onReserve(bus)}
+              data-testid={`button-reserve-bus-${bus.id}`}
+              className="flex-shrink-0"
+              disabled={hasActiveReservation}
+              variant={hasActiveReservation ? "secondary" : "default"}
+              title={hasActiveReservation ? t('hasActiveReservationTooltip') : undefined}
+            >
+              {t('reserveSeat')}
+            </Button>
+            {hasActiveReservation && (
+              <p className="text-xs text-muted-foreground text-center max-w-[140px]">
+                {t('hasActiveReservationShort')}
+              </p>
+            )}
+          </div>
         )}
       </div>
     </Card>

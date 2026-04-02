@@ -34,6 +34,7 @@ export interface IStorage {
   // Reservations
   getReservation(id: string): Promise<Reservation | undefined>;
   getReservationsByUser(userId: string): Promise<(Reservation & { bus?: Bus })[]>;
+  getActiveReservationByUser(userId: string): Promise<Reservation | undefined>;
   getReservationsByBus(busId: string): Promise<Reservation[]>;
   createReservation(reservation: InsertReservation): Promise<Reservation>;
   updateReservation(id: string, updates: Partial<Reservation>): Promise<Reservation | undefined>;
@@ -283,6 +284,12 @@ export class MemStorage implements IStorage {
       ...r,
       bus: this.buses.get(r.busId)
     }));
+  }
+
+  async getActiveReservationByUser(userId: string): Promise<Reservation | undefined> {
+    return Array.from(this.reservations.values()).find(
+      (r) => r.passengerId === userId && (r.status === "pending" || r.status === "confirmed")
+    );
   }
 
   async getReservationsByBus(busId: string): Promise<Reservation[]> {

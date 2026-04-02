@@ -41,6 +41,16 @@ export default function MapPage() {
     queryKey: ["/api/buses"],
   });
 
+  // Fetch user's active reservation
+  const { data: activeReservation } = useQuery({
+    queryKey: ["/api/reservations/user", user?.id, "active"],
+    queryFn: () =>
+      fetch(`/api/reservations/user/${user?.id}/active`).then((r) => r.json()),
+    enabled: !!user?.id && user?.role === "citizen",
+  });
+
+  const hasActiveReservation = !!activeReservation;
+
   // Get user location and detect governorate
   useEffect(() => {
     if (navigator.geolocation) {
@@ -81,6 +91,7 @@ export default function MapPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/buses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/reservations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reservations/user", user?.id, "active"] });
       setShowReservationDialog(false);
       setSelectedBus(null);
     },
@@ -166,6 +177,16 @@ export default function MapPage() {
         />
       </section>
 
+      {/* Active Reservation Notice */}
+      {hasActiveReservation && user?.role === "citizen" && (
+        <section className="px-4 pb-2">
+          <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-sm">
+            <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+            <p className="text-yellow-800 dark:text-yellow-300">{t('hasActiveReservationNotice')}</p>
+          </div>
+        </section>
+      )}
+
       {/* Bus List Section */}
       <section className="px-4">
         <div className="flex items-center justify-between mb-4">
@@ -193,6 +214,7 @@ export default function MapPage() {
                 bus={bus}
                 onReserve={handleReserve}
                 showReserveButton={user?.role === "citizen"}
+                hasActiveReservation={hasActiveReservation}
               />
             ))}
           </div>
@@ -228,13 +250,20 @@ export default function MapPage() {
               </div>
             </div>
             {user?.role === "citizen" && selectedBus.totalCapacity - selectedBus.currentPassengers > 0 && (
-              <Button
-                className="w-full mt-4"
-                onClick={() => handleReserve(selectedBus)}
-                data-testid="button-reserve-from-details"
-              >
-                {t('reserveSeat')}
-              </Button>
+              <div className="mt-4 space-y-2">
+                {hasActiveReservation && (
+                  <p className="text-xs text-center text-muted-foreground">{t('hasActiveReservationShort')}</p>
+                )}
+                <Button
+                  className="w-full"
+                  onClick={() => handleReserve(selectedBus)}
+                  data-testid="button-reserve-from-details"
+                  disabled={hasActiveReservation}
+                  variant={hasActiveReservation ? "secondary" : "default"}
+                >
+                  {t('reserveSeat')}
+                </Button>
+              </div>
             )}
           </Card>
         </div>

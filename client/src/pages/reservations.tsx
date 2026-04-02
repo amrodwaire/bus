@@ -39,6 +39,7 @@ export default function Reservations() {
         description: t('reservationCancelledDesc'),
       });
       queryClient.invalidateQueries({ queryKey: [`/api/reservations/user/${user?.id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reservations/user", user?.id, "active"] });
       queryClient.invalidateQueries({ queryKey: ["/api/buses"] });
     },
     onError: () => {

@@ -203,6 +203,16 @@ export async function registerRoutes(
     }
   });
 
+  // Get user's active reservation
+  app.get("/api/reservations/user/:userId/active", async (req, res) => {
+    try {
+      const reservation = await storage.getActiveReservationByUser(req.params.userId);
+      res.json(reservation || null);
+    } catch (error) {
+      res.status(500).json({ message: "حدث خطأ في الخادم" });
+    }
+  });
+
   // Get bus reservations
   app.get("/api/reservations/bus/:busId", async (req, res) => {
     try {
@@ -230,6 +240,17 @@ export async function registerRoutes(
       
       if (bus.currentPassengers >= bus.totalCapacity) {
         return res.status(400).json({ message: "الباص ممتلئ" });
+      }
+
+      // Check if user already has an active reservation
+      if (passengerId && passengerId !== "anonymous") {
+        const existingReservation = await storage.getActiveReservationByUser(passengerId);
+        if (existingReservation) {
+          return res.status(400).json({ 
+            message: "لديك حجز نشط بالفعل. يرجى إلغاء حجزك الحالي قبل حجز باص جديد",
+            code: "ACTIVE_RESERVATION_EXISTS"
+          });
+        }
       }
       
       // Validate pickup location is on the route (ahead of bus)
