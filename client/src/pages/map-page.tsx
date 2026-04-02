@@ -54,6 +54,7 @@ export default function MapPage() {
   const [tripRoute, setTripRoute] = useState<TripRoute>({ from: "", to: "", isSet: false });
   const [routeFrom, setRouteFrom] = useState("");
   const [routeTo, setRouteTo] = useState("");
+  const [showLocationWarning, setShowLocationWarning] = useState(false);
 
   // Fetch available buses
   const { data: buses = [], isLoading } = useQuery<BusType[]>({
@@ -123,6 +124,11 @@ export default function MapPage() {
   const handleReserve = (bus: BusType) => { setSelectedBus(bus); setShowReservationDialog(true); };
   const confirmReservation = () => { if (selectedBus && user) reserveMutation.mutate(selectedBus.id); };
 
+  const confirmSetRoute = () => {
+    setTripRoute({ from: routeFrom, to: routeTo, isSet: true });
+    setShowLocationWarning(false);
+  };
+
   const handleSetRoute = () => {
     if (!routeFrom || !routeTo) {
       toast({ title: t('fillAllFields'), variant: "destructive" });
@@ -130,6 +136,11 @@ export default function MapPage() {
     }
     if (routeFrom === routeTo) {
       toast({ title: t('error'), description: t('fillAllFields'), variant: "destructive" });
+      return;
+    }
+    // Check if selected departure matches user's actual location
+    if (routeFrom !== userGovernorate) {
+      setShowLocationWarning(true);
       return;
     }
     setTripRoute({ from: routeFrom, to: routeTo, isSet: true });
@@ -402,6 +413,35 @@ export default function MapPage() {
           </Card>
         </div>
       )}
+
+      {/* Location Mismatch Warning Dialog */}
+      <Dialog open={showLocationWarning} onOpenChange={setShowLocationWarning}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-500" />
+              {t('locationMismatch')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('locationMismatchDesc')
+                .replace('{current}', getGovLabel(userGovernorate))
+                .replace('{selected}', getGovLabel(routeFrom))}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowLocationWarning(false)}>
+              {t('back')}
+            </Button>
+            <Button
+              variant="default"
+              onClick={confirmSetRoute}
+              data-testid="button-confirm-route-anyway"
+            >
+              {t('continueAnyway')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reservation Confirmation Dialog */}
       <Dialog open={showReservationDialog} onOpenChange={setShowReservationDialog}>
