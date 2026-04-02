@@ -244,6 +244,10 @@ const translations: Record<Language, Record<string, string>> = {
     km: "كم",
     min: "دقيقة",
     passengersOnMap: "مواقع الراكبين تظهر على الخريطة بالأعلى",
+    fromPointTooFar: "نقطة البداية بعيدة عنك",
+    fromPointTooFarDesc: "يجب أن تحدد نقطة الانطلاق على بعد 100 متر منك كحد أقصى — اضغط على موقعك الحالي أو قريباً منه",
+    toPointTooClose: "الوجهة قريبة جداً",
+    toPointTooCloseDesc: "يجب أن تكون نقطة الوجهة على بعد أكثر من 300 متر من نقطة الانطلاق — اختر موقعاً أبعد",
 
     // Driver waypoints
     stop: "محطة",
@@ -493,6 +497,10 @@ const translations: Record<Language, Record<string, string>> = {
     km: "km",
     min: "min",
     passengersOnMap: "Passenger pickup locations are shown on the map above",
+    fromPointTooFar: "Departure point is too far",
+    fromPointTooFarDesc: "Your departure point must be within 100 meters of your current GPS location — tap near where you are standing",
+    toPointTooClose: "Destination is too close",
+    toPointTooCloseDesc: "Your destination must be more than 300 meters from your departure point — pick a location further away",
 
     // Driver waypoints
     stop: "Stop",

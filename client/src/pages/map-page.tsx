@@ -23,7 +23,7 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { apiRequest } from "@/lib/queryClient";
 import { detectGovernorate, getGovernorateName, governorateNames } from "@/lib/governorate-utils";
-import { getRouteOnRoad, isNearRoute, hasBusPassed, type RouteResult } from "@/lib/routing-service";
+import { getRouteOnRoad, isNearRoute, hasBusPassed, getDistanceMeters, type RouteResult } from "@/lib/routing-service";
 import type { Bus as BusType, Governorate } from "@shared/schema";
 
 interface RoutePoint {
@@ -117,20 +117,36 @@ export default function MapPage() {
   // Handle map click for route selection
   const handleMapClick = async (lat: number, lng: number) => {
     if (routeStep === 1) {
-      const clickedGov = detectGovernorate(lat, lng) ?? "amman";
-      if (clickedGov !== userGovernorate) {
-        toast({
-          title: t('locationMismatch'),
-          description: t('locationMismatchDesc')
-            .replace('{current}', getGovLabel(userGovernorate))
-            .replace('{selected}', getGovLabel(clickedGov)),
-          variant: "destructive",
-        });
-        return;
+      // Validation 1: from point must be within 100m of the user's GPS
+      if (userLocation) {
+        const distFromUser = getDistanceMeters(userLocation.lat, userLocation.lng, lat, lng);
+        if (distFromUser > 100) {
+          toast({
+            title: t('fromPointTooFar'),
+            description: t('fromPointTooFarDesc'),
+            variant: "destructive",
+          });
+          return;
+        }
       }
+
+      const clickedGov = detectGovernorate(lat, lng) ?? "amman";
       setFromPoint({ lat, lng, gov: clickedGov });
       setRouteStep(2);
     } else if (routeStep === 2) {
+      // Validation 2: to point must be at least 300m from the from point
+      if (fromPoint) {
+        const distFromStart = getDistanceMeters(fromPoint.lat, fromPoint.lng, lat, lng);
+        if (distFromStart < 300) {
+          toast({
+            title: t('toPointTooClose'),
+            description: t('toPointTooCloseDesc'),
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       const clickedGov = detectGovernorate(lat, lng) ?? "amman";
       const newTo = { lat, lng, gov: clickedGov };
       setToPoint(newTo);
