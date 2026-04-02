@@ -23,6 +23,7 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { apiRequest } from "@/lib/queryClient";
 import { detectGovernorate, getGovernorateName, governorateNames } from "@/lib/governorate-utils";
+import { getRouteOnRoad, isNearRoute, hasBusPassed, type RouteResult } from "@/lib/routing-service";
 import type { Bus as BusType, Governorate } from "@shared/schema";
 
 interface RoutePoint {
@@ -46,6 +47,7 @@ export default function MapPage() {
   const [routeStep, setRouteStep] = useState<0 | 1 | 2>(0);
   const [fromPoint, setFromPoint] = useState<RoutePoint | null>(null);
   const [toPoint, setToPoint] = useState<RoutePoint | null>(null);
+  const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
 
   const { data: buses = [], isLoading } = useQuery<BusType[]>({
     queryKey: ["/api/buses"],
@@ -113,10 +115,9 @@ export default function MapPage() {
   const confirmReservation = () => { if (selectedBus && user) reserveMutation.mutate(selectedBus.id); };
 
   // Handle map click for route selection
-  const handleMapClick = (lat: number, lng: number) => {
+  const handleMapClick = async (lat: number, lng: number) => {
     if (routeStep === 1) {
       const clickedGov = detectGovernorate(lat, lng) ?? "amman";
-      // Validate: from point must be in user's governorate
       if (clickedGov !== userGovernorate) {
         toast({
           title: t('locationMismatch'),
@@ -131,20 +132,27 @@ export default function MapPage() {
       setRouteStep(2);
     } else if (routeStep === 2) {
       const clickedGov = detectGovernorate(lat, lng) ?? "amman";
-      setToPoint({ lat, lng, gov: clickedGov });
+      const newTo = { lat, lng, gov: clickedGov };
+      setToPoint(newTo);
       setRouteStep(0);
+      if (fromPoint) {
+        const result = await getRouteOnRoad(fromPoint, newTo);
+        if (result) setRouteResult(result);
+      }
     }
   };
 
   const handleClearRoute = () => {
     setFromPoint(null);
     setToPoint(null);
+    setRouteResult(null);
     setRouteStep(0);
   };
 
   const handleStartSetting = () => {
     setFromPoint(null);
     setToPoint(null);
+    setRouteResult(null);
     setRouteStep(1);
   };
 
@@ -155,7 +163,36 @@ export default function MapPage() {
       if (!b.isVisible) return false;
 
       if (routeIsSet && fromPoint && toPoint) {
-        return b.governorate === fromPoint.gov && b.destinationGovernorate === toPoint.gov;
+        const busLat = b.currentLat;
+        const busLng = b.currentLng;
+        if (!busLat || !busLng) return false;
+
+        const busGov = b.governorate as Governorate | null;
+        const destGov = b.destinationGovernorate as Governorate | null;
+        const govMatch =
+          (busGov === fromPoint.gov || busGov === toPoint.gov) ||
+          (destGov === fromPoint.gov || destGov === toPoint.gov);
+
+        if (!govMatch) {
+          if (routeResult) {
+            if (!isNearRoute({ lat: busLat, lng: busLng }, routeResult.coordinates, 3000)) {
+              return false;
+            }
+          } else {
+            return false;
+          }
+        }
+
+        if (userLocation && hasBusPassed(
+          { lat: busLat, lng: busLng },
+          userLocation,
+          fromPoint,
+          toPoint
+        )) {
+          return false;
+        }
+
+        return true;
       }
 
       const busGov = b.governorate as Governorate | null;
@@ -163,7 +200,7 @@ export default function MapPage() {
       if (!busGov && !destGov) return true;
       return busGov === userGovernorate || destGov === userGovernorate;
     });
-  }, [buses, userGovernorate, fromPoint, toPoint, routeIsSet]);
+  }, [buses, userGovernorate, fromPoint, toPoint, routeIsSet, routeResult, userLocation]);
 
   const getDisplayRouteName = (bus: BusType) => {
     return language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
@@ -266,6 +303,13 @@ export default function MapPage() {
                     <div className="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">B</div>
                     <span className="text-sm font-semibold">{getGovLabel(toPoint.gov)}</span>
                   </div>
+                  {routeResult && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground ps-8">
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold">{routeResult.distanceKm} {t('km')}</span>
+                      <span>·</span>
+                      <span>{routeResult.durationMin} {t('min')}</span>
+                    </div>
+                  )}
                 </div>
                 <Button size="sm" variant="outline" onClick={handleClearRoute} data-testid="button-clear-route" className="gap-1">
                   <X className="h-3.5 w-3.5" />
@@ -289,6 +333,9 @@ export default function MapPage() {
           routeFrom={fromPoint ?? undefined}
           routeTo={toPoint ?? undefined}
           routeMode={routeStep === 1 ? "from" : routeStep === 2 ? "to" : undefined}
+          routePath={routeResult?.coordinates}
+          routeDistanceKm={routeResult?.distanceKm}
+          routeDurationMin={routeResult?.durationMin}
         />
       </section>
 

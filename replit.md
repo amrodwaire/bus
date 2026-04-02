@@ -9,7 +9,7 @@ MVP complete with:
 - Real interactive map with React-Leaflet and OpenStreetMap
 - Reservation system with priority-based booking (one active reservation per user)
 - Driver dashboard for capacity management with governorate selection
-- **Citizen trip route selector** — click-on-map to pin departure (A) and destination (B) points, filters to matching buses by governorate
+- **Citizen trip route selector** — click-on-map to pin departure (A) and destination (B) points; road-following route via OSRM API; smart bus filtering (near-route + hides buses that already passed the user); shows distance/duration
 - **Driver waypoint management** — click-on-map to add route stops, save/clear, numbered markers
 - **Seat pricing** — drivers set price per seat (in JD), shown on bus cards and reservation dialog
 - Issue reporting system

@@ -241,6 +241,8 @@ const translations: Record<Language, Record<string, string>> = {
     clickMapToSetRoute: "اضغط الزر لتحديد مسارك مباشرة على الخريطة",
     tapMapForStart: "اضغط على الخريطة لتحديد نقطة انطلاقك",
     tapMapForEnd: "اضغط على الخريطة لتحديد وجهتك",
+    km: "كم",
+    min: "دقيقة",
 
     // Driver waypoints
     stop: "محطة",
@@ -487,6 +489,8 @@ const translations: Record<Language, Record<string, string>> = {
     clickMapToSetRoute: "Tap the button to pin your route directly on the map",
     tapMapForStart: "Tap on the map to set your departure point",
     tapMapForEnd: "Tap on the map to set your destination",
+    km: "km",
+    min: "min",
 
     // Driver waypoints
     stop: "Stop",

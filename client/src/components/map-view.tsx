@@ -19,6 +19,9 @@ interface MapViewProps {
   routeFrom?: { lat: number; lng: number };
   routeTo?: { lat: number; lng: number };
   routeMode?: "from" | "to";
+  routePath?: [number, number][];
+  routeDistanceKm?: number;
+  routeDurationMin?: number;
 }
 
 function MapController({ center, initialOnly }: { center: { lat: number; lng: number }; initialOnly?: boolean }) {
@@ -153,6 +156,9 @@ export function MapView({
   routeFrom,
   routeTo,
   routeMode,
+  routePath,
+  routeDistanceKm,
+  routeDurationMin,
 }: MapViewProps) {
   const { t } = useLanguage();
 
@@ -219,8 +225,29 @@ export function MapView({
           </>
         )}
 
-        {/* Dashed polyline between from → to */}
-        {hasBothRoutePoints && (
+        {/* Road-following route polyline */}
+        {routePath && routePath.length > 0 && (
+          <>
+            <Polyline
+              positions={routePath}
+              pathOptions={{
+                color: '#1a73e8',
+                weight: 6,
+                opacity: 0.15,
+              }}
+            />
+            <Polyline
+              positions={routePath}
+              pathOptions={{
+                color: '#4285F4',
+                weight: 4,
+                opacity: 0.9,
+              }}
+            />
+          </>
+        )}
+        {/* Fallback straight dashed line when no road path yet */}
+        {hasBothRoutePoints && !routePath && (
           <Polyline
             positions={[
               [routeFrom.lat, routeFrom.lng],
@@ -229,7 +256,7 @@ export function MapView({
             pathOptions={{
               color: '#4285F4',
               weight: 4,
-              opacity: 0.8,
+              opacity: 0.5,
               dashArray: '12, 8',
             }}
           />
@@ -302,6 +329,15 @@ export function MapView({
               : "bg-indigo-600/90"
         }`}>
           {routeMapLabel}
+        </div>
+      )}
+
+      {/* Route distance/duration info badge */}
+      {routeDistanceKm != null && routeDurationMin != null && !routeMode && (
+        <div className="absolute bottom-3 left-3 z-[1000] bg-white dark:bg-zinc-800 text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg border border-border flex items-center gap-2" data-testid="badge-route-info">
+          <span className="text-blue-600 dark:text-blue-400">{routeDistanceKm} {t('km')}</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-muted-foreground">{routeDurationMin} {t('min')}</span>
         </div>
       )}
 
