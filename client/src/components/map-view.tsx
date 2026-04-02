@@ -363,7 +363,7 @@ export function MapView({
             </Popup>
           </Marker>
         ))}
-        {showUserLocation && userLocation && !onMapClick && (
+        {showUserLocation && userLocation && (
           <RecenterButton userLocation={userLocation} />
         )}
       </MapContainer>
@@ -407,15 +407,18 @@ function RecenterButton({ userLocation }: { userLocation: { lat: number; lng: nu
   const map = useMap();
   return (
     <button
-      onClick={() => map.setView([userLocation.lat, userLocation.lng], 15, { animate: true })}
-      className="absolute bottom-3 right-3 z-[1000] w-10 h-10 bg-white dark:bg-zinc-800 rounded-full shadow-lg border border-border flex items-center justify-center hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors"
+      onClick={() => map.setView([userLocation.lat, userLocation.lng], 17, { animate: true })}
+      className="absolute bottom-5 right-3 z-[1000] bg-white dark:bg-zinc-800 rounded-full shadow-xl border-2 border-blue-400 flex items-center gap-2 px-3 py-2 hover:bg-blue-50 dark:hover:bg-zinc-700 active:scale-95 transition-all"
       data-testid="button-recenter-map"
       title="My location"
+      style={{ minWidth: 44 }}
     >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" fill="#3b82f6" fillOpacity="0.25"/>
         <circle cx="12" cy="12" r="3"/>
         <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
       </svg>
+      <span className="text-xs font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">موقعي</span>
     </button>
   );
 }
