@@ -235,8 +235,8 @@ const translations: Record<Language, Record<string, string>> = {
     showingBusesOn: "عرض باصات المسار",
     noBusesOnRoute: "لا توجد باصات على هذا المسار",
     noBusesOnRouteDesc: "جرب مساراً مختلفاً أو امسح الفلتر لرؤية جميع الباصات",
-    locationMismatch: "أنت بعيد عن موقع الانطلاق",
-    locationMismatchDesc: "موقعك الحالي في {current} لكنك اخترت الانطلاق من {selected}. هل أنت متأكد؟",
+    locationMismatch: "اختر موقعاً أقرب إليك",
+    locationMismatchDesc: "موقعك الحالي في {current}. لا يمكنك الانطلاق من {selected} لأنها بعيدة عن موقعك الحالي.",
     continueAnyway: "متابعة على أي حال",
 
     // Driver waypoints
@@ -478,8 +478,8 @@ const translations: Record<Language, Record<string, string>> = {
     showingBusesOn: "Showing buses on route",
     noBusesOnRoute: "No buses on this route",
     noBusesOnRouteDesc: "Try a different route or clear the filter to see all buses",
-    locationMismatch: "You are far from the starting point",
-    locationMismatchDesc: "Your current location is in {current} but you selected {selected} as the starting point. Are you sure?",
+    locationMismatch: "Select a closer location",
+    locationMismatchDesc: "You are currently in {current}. You cannot depart from {selected} because it is far from your current location.",
     continueAnyway: "Continue anyway",
 
     // Driver waypoints
