@@ -4,7 +4,8 @@ import {
   Phone, 
   IdCard, 
   LogOut, 
-  ChevronLeft, 
+  ChevronLeft,
+  ChevronRight,
   Shield,
   Bus,
   FileText
@@ -22,7 +23,8 @@ import { LanguageToggle } from "@/components/language-toggle";
 export default function Profile() {
   const [, setLocation] = useLocation();
   const { user, logout } = useAuth();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
+  const ChevronArrow = isRTL ? ChevronLeft : ChevronRight;
 
   const handleLogout = () => {
     logout();
@@ -110,7 +112,7 @@ export default function Profile() {
 
         <Card className="divide-y divide-border">
           <button 
-            className="flex items-center justify-between w-full p-4 hover-elevate text-right"
+            className="flex items-center justify-between w-full p-4 hover-elevate text-start"
             data-testid="button-privacy"
           >
             <div className="flex items-center gap-3">
@@ -119,11 +121,11 @@ export default function Profile() {
               </div>
               <span className="font-medium">{t('privacySecurity')}</span>
             </div>
-            <ChevronLeft className="h-5 w-5 text-muted-foreground" />
+            <ChevronArrow className="h-5 w-5 text-muted-foreground" />
           </button>
 
           <button 
-            className="flex items-center justify-between w-full p-4 hover-elevate text-right"
+            className="flex items-center justify-between w-full p-4 hover-elevate text-start"
             data-testid="button-terms"
           >
             <div className="flex items-center gap-3">
@@ -132,7 +134,7 @@ export default function Profile() {
               </div>
               <span className="font-medium">{t('termsConditions')}</span>
             </div>
-            <ChevronLeft className="h-5 w-5 text-muted-foreground" />
+            <ChevronArrow className="h-5 w-5 text-muted-foreground" />
           </button>
         </Card>
 

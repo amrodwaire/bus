@@ -17,6 +17,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { jordanGovernorates } from "@shared/schema";
+import { governorateNames } from "@/lib/governorate-utils";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -234,6 +243,44 @@ export default function DriverDashboard() {
                   onChange={(e) => setBusFormData({ ...busFormData, totalCapacity: parseInt(e.target.value) || 15 })}
                   data-testid="input-capacity"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t('originGovernorate')}</Label>
+                <Select
+                  value={busFormData.governorate}
+                  onValueChange={(val) => setBusFormData({ ...busFormData, governorate: val })}
+                >
+                  <SelectTrigger data-testid="select-governorate">
+                    <SelectValue placeholder={t('selectGovernorate')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jordanGovernorates.map((gov) => (
+                      <SelectItem key={gov} value={gov}>
+                        {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t('destinationGovernorate')}</Label>
+                <Select
+                  value={busFormData.destinationGovernorate}
+                  onValueChange={(val) => setBusFormData({ ...busFormData, destinationGovernorate: val })}
+                >
+                  <SelectTrigger data-testid="select-destination-governorate">
+                    <SelectValue placeholder={t('selectGovernorate')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jordanGovernorates.map((gov) => (
+                      <SelectItem key={gov} value={gov}>
+                        {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <DialogFooter>
