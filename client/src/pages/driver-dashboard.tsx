@@ -246,128 +246,6 @@ export default function DriverDashboard() {
       phone: r.passengerPhone,
     }));
 
-  const BusCreationDialog = () => (
-    <Dialog open={showBusDialog} onOpenChange={setShowBusDialog}>
-      <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{t('createBus')}</DialogTitle>
-          <DialogDescription>{t('enterBusDetails')}</DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleCreateBus} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="plateNumber">{t('plateNumber')}</Label>
-            <Input
-              id="plateNumber"
-              placeholder={t('examplePlate')}
-              value={busFormData.plateNumber}
-              onChange={(e) => setBusFormData({ ...busFormData, plateNumber: e.target.value })}
-              data-testid="input-plate-number"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="routeName">{t('routeName')} ({t('arabic')})</Label>
-            <Input
-              id="routeName"
-              placeholder="مثال: عمان - الزرقاء"
-              value={busFormData.routeName}
-              onChange={(e) => setBusFormData({ ...busFormData, routeName: e.target.value })}
-              data-testid="input-route-name"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="routeNameEn">{t('routeName')} ({t('english')})</Label>
-            <Input
-              id="routeNameEn"
-              placeholder="e.g. Amman - Zarqa"
-              value={busFormData.routeNameEn}
-              onChange={(e) => setBusFormData({ ...busFormData, routeNameEn: e.target.value })}
-              data-testid="input-route-name-en"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="capacity">{t('totalCapacity')}</Label>
-            <Input
-              id="capacity"
-              type="number"
-              min="1"
-              max="50"
-              value={busFormData.totalCapacity}
-              onChange={(e) => setBusFormData({ ...busFormData, totalCapacity: parseInt(e.target.value) || 15 })}
-              data-testid="input-capacity"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="price">{t('seatPrice')} ({t('jd')})</Label>
-            <Input
-              id="price"
-              type="number"
-              min="0"
-              step="0.05"
-              placeholder="0.50"
-              value={busFormData.price}
-              onChange={(e) => setBusFormData({ ...busFormData, price: e.target.value })}
-              data-testid="input-price"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>{t('originGovernorate')}</Label>
-            <Select
-              value={busFormData.governorate}
-              onValueChange={(val) => setBusFormData({ ...busFormData, governorate: val })}
-            >
-              <SelectTrigger data-testid="select-governorate">
-                <SelectValue placeholder={t('selectGovernorate')} />
-              </SelectTrigger>
-              <SelectContent>
-                {jordanGovernorates.map((gov) => (
-                  <SelectItem key={gov} value={gov}>
-                    {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>{t('destinationGovernorate')}</Label>
-            <Select
-              value={busFormData.destinationGovernorate}
-              onValueChange={(val) => setBusFormData({ ...busFormData, destinationGovernorate: val })}
-            >
-              <SelectTrigger data-testid="select-destination-governorate">
-                <SelectValue placeholder={t('selectGovernorate')} />
-              </SelectTrigger>
-              <SelectContent>
-                {jordanGovernorates.map((gov) => (
-                  <SelectItem key={gov} value={gov}>
-                    {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="submit"
-              disabled={createBusMutation.isPending}
-              data-testid="button-submit-bus"
-            >
-              {createBusMutation.isPending ? t('registering') : t('createBus')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
 
   if (busLoading) {
     return (
@@ -406,7 +284,118 @@ export default function DriverDashboard() {
             </Button>
           </Card>
         </div>
-        <BusCreationDialog />
+        <Dialog open={showBusDialog} onOpenChange={setShowBusDialog}>
+          <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{t('createBus')}</DialogTitle>
+              <DialogDescription>{t('enterBusDetails')}</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateBus} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="plateNumber">{t('plateNumber')}</Label>
+                <Input
+                  id="plateNumber"
+                  placeholder={t('examplePlate')}
+                  value={busFormData.plateNumber}
+                  onChange={(e) => setBusFormData({ ...busFormData, plateNumber: e.target.value })}
+                  data-testid="input-plate-number"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="routeName">{t('routeName')} ({t('arabic')})</Label>
+                <Input
+                  id="routeName"
+                  placeholder="مثال: عمان - الزرقاء"
+                  value={busFormData.routeName}
+                  onChange={(e) => setBusFormData({ ...busFormData, routeName: e.target.value })}
+                  data-testid="input-route-name"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="routeNameEn">{t('routeName')} ({t('english')})</Label>
+                <Input
+                  id="routeNameEn"
+                  placeholder="e.g. Amman - Zarqa"
+                  value={busFormData.routeNameEn}
+                  onChange={(e) => setBusFormData({ ...busFormData, routeNameEn: e.target.value })}
+                  data-testid="input-route-name-en"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="capacity">{t('totalCapacity')}</Label>
+                <Input
+                  id="capacity"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={busFormData.totalCapacity}
+                  onChange={(e) => setBusFormData({ ...busFormData, totalCapacity: parseInt(e.target.value) || 15 })}
+                  data-testid="input-capacity"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="price">{t('seatPrice')} ({t('jd')})</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  min="0"
+                  step="0.05"
+                  placeholder="0.50"
+                  value={busFormData.price}
+                  onChange={(e) => setBusFormData({ ...busFormData, price: e.target.value })}
+                  data-testid="input-price"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('originGovernorate')}</Label>
+                <Select
+                  value={busFormData.governorate}
+                  onValueChange={(val) => setBusFormData({ ...busFormData, governorate: val })}
+                >
+                  <SelectTrigger data-testid="select-governorate">
+                    <SelectValue placeholder={t('selectGovernorate')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jordanGovernorates.map((gov) => (
+                      <SelectItem key={gov} value={gov}>
+                        {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('destinationGovernorate')}</Label>
+                <Select
+                  value={busFormData.destinationGovernorate}
+                  onValueChange={(val) => setBusFormData({ ...busFormData, destinationGovernorate: val })}
+                >
+                  <SelectTrigger data-testid="select-destination-governorate">
+                    <SelectValue placeholder={t('selectGovernorate')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jordanGovernorates.map((gov) => (
+                      <SelectItem key={gov} value={gov}>
+                        {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="submit"
+                  disabled={createBusMutation.isPending}
+                  data-testid="button-submit-bus"
+                >
+                  {createBusMutation.isPending ? t('registering') : t('createBus')}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
         <BottomNav />
       </div>
     );
