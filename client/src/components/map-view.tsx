@@ -32,6 +32,7 @@ interface MapViewProps {
   routeDurationMin?: number;
   passengerPickups?: PassengerPickup[];
   reservedBusId?: string | null;
+  showHiddenBuses?: boolean;
 }
 
 function MapController({ center, initialOnly }: { center: { lat: number; lng: number }; initialOnly?: boolean }) {
@@ -222,12 +223,13 @@ export function MapView({
   routeDurationMin,
   passengerPickups = [],
   reservedBusId = null,
+  showHiddenBuses = false,
 }: MapViewProps) {
   const { t } = useLanguage();
 
   const defaultCenter = { lat: 31.9539, lng: 35.9106 };
   const center = userLocation || defaultCenter;
-  const visibleBuses = buses.filter(b => b.isVisible && b.currentLat && b.currentLng);
+  const visibleBuses = buses.filter(b => (showHiddenBuses || b.isVisible) && b.currentLat && b.currentLng);
 
   const displayWaypoints = editableWaypoints.length > 0 ? editableWaypoints : waypoints;
   const isEditable = editableWaypoints.length > 0;

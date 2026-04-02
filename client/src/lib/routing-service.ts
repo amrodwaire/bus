@@ -31,6 +31,34 @@ export async function getRouteOnRoad(
   }
 }
 
+export async function getMultiSegmentRoute(
+  points: { lat: number; lng: number }[]
+): Promise<RouteResult | null> {
+  if (points.length < 2) return null;
+  try {
+    const coords = points.map(p => `${p.lng},${p.lat}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data.code !== "Ok" || !data.routes?.[0]) return null;
+
+    const route = data.routes[0];
+    const coordinates: [number, number][] = route.geometry.coordinates.map(
+      (c: [number, number]) => [c[1], c[0]]
+    );
+
+    return {
+      coordinates,
+      distanceKm: Math.round((route.distance / 1000) * 10) / 10,
+      durationMin: Math.round(route.duration / 60),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function getDistanceMeters(
   lat1: number, lng1: number,
   lat2: number, lng2: number

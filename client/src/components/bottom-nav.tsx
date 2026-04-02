@@ -17,7 +17,6 @@ export function BottomNav() {
 
   const driverNavItems = [
     { path: "/driver", label: t('driverDashboard'), icon: LayoutDashboard, testId: "nav-dashboard" },
-    { path: "/map", label: t('map'), icon: Map, testId: "nav-map" },
     { path: "/report", label: t('report'), icon: AlertTriangle, testId: "nav-report" },
     { path: "/profile", label: t('profile'), icon: User, testId: "nav-profile" },
   ];

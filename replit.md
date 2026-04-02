@@ -44,7 +44,7 @@ MVP complete with:
 2. **Dual Registration**: Separate flows for citizens and drivers
 3. **Real-time Bus Tracking**: Interactive map with custom markers showing seat availability
 4. **Smart Reservations**: Priority system based on booking order; one active reservation per user
-5. **Driver Controls**: Passenger count, visibility toggle, route management with governorate selection
+5. **Driver Controls**: Passenger count, visibility toggle (bus stays visible on driver's own map), inline seat price editing, OSRM road-following route management with governorate selection
 6. **Governorate Filtering**: User's location used to detect governorate, only relevant buses shown
 7. **Issue Reporting**: Category-based technical issue submission
 

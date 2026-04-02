@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bus,
@@ -15,6 +15,7 @@ import {
   Pencil,
   Banknote,
   X,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -48,6 +49,7 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { MapView, type PassengerPickup } from "@/components/map-view";
 import { apiRequest } from "@/lib/queryClient";
+import { getMultiSegmentRoute, type RouteResult } from "@/lib/routing-service";
 import type { Bus as BusType, Reservation, RouteWaypoint } from "@shared/schema";
 
 type ReservationWithPassenger = Reservation & {
@@ -79,6 +81,10 @@ export default function DriverDashboard() {
 
   const [isEditingRoute, setIsEditingRoute] = useState(false);
   const [tempWaypoints, setTempWaypoints] = useState<TempWaypoint[]>([]);
+  const [driverRoutePath, setDriverRoutePath] = useState<[number, number][] | undefined>(undefined);
+  const [routeInfo, setRouteInfo] = useState<{ distanceKm: number; durationMin: number } | null>(null);
+  const [isEditingPrice, setIsEditingPrice] = useState(false);
+  const [editPrice, setEditPrice] = useState("");
 
   const getDisplayRouteName = (bus: BusType) => {
     return language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
@@ -100,9 +106,26 @@ export default function DriverDashboard() {
     enabled: !!driverBus?.id,
   });
 
+  const computeRoutePath = useCallback(async (points: TempWaypoint[]) => {
+    if (points.length < 2) {
+      setDriverRoutePath(undefined);
+      setRouteInfo(null);
+      return;
+    }
+    const result = await getMultiSegmentRoute(points);
+    if (result) {
+      setDriverRoutePath(result.coordinates);
+      setRouteInfo({ distanceKm: result.distanceKm, durationMin: result.durationMin });
+    } else {
+      setDriverRoutePath(undefined);
+      setRouteInfo(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (savedWaypoints.length > 0 && !isEditingRoute) {
       setTempWaypoints(savedWaypoints.map(wp => ({ lat: wp.lat, lng: wp.lng })));
+      computeRoutePath(savedWaypoints.map(wp => ({ lat: wp.lat, lng: wp.lng })));
     }
   }, [savedWaypoints]);
 
@@ -176,11 +199,15 @@ export default function DriverDashboard() {
 
   const handleMapClick = (lat: number, lng: number) => {
     if (!isEditingRoute) return;
-    setTempWaypoints(prev => [...prev, { lat, lng }]);
+    const newWaypoints = [...tempWaypoints, { lat, lng }];
+    setTempWaypoints(newWaypoints);
+    computeRoutePath(newWaypoints);
   };
 
   const handleRemoveWaypoint = (index: number) => {
-    setTempWaypoints(prev => prev.filter((_, i) => i !== index));
+    const newWaypoints = tempWaypoints.filter((_, i) => i !== index);
+    setTempWaypoints(newWaypoints);
+    computeRoutePath(newWaypoints);
   };
 
   const handleStartEditing = () => {
@@ -189,8 +216,21 @@ export default function DriverDashboard() {
   };
 
   const handleCancelEditing = () => {
-    setTempWaypoints(savedWaypoints.map(wp => ({ lat: wp.lat, lng: wp.lng })));
+    const pts = savedWaypoints.map(wp => ({ lat: wp.lat, lng: wp.lng }));
+    setTempWaypoints(pts);
     setIsEditingRoute(false);
+    computeRoutePath(pts);
+  };
+
+  const handleSavePrice = () => {
+    const parsed = editPrice !== "" ? parseFloat(editPrice) : null;
+    const priceVal = parsed !== null && isNaN(parsed) ? null : parsed;
+    updateBusMutation.mutate({ price: priceVal } as any, {
+      onSuccess: () => {
+        setIsEditingPrice(false);
+        toast({ title: t('saved') });
+      },
+    });
   };
 
   const availableSeats = driverBus ? driverBus.totalCapacity - driverBus.currentPassengers : 0;
@@ -401,14 +441,54 @@ export default function DriverDashboard() {
               <div>
                 <h2 className="font-bold">{getDisplayRouteName(driverBus)}</h2>
                 <p className="text-sm text-muted-foreground">{driverBus.plateNumber}</p>
-                {driverBus.price != null && (
-                  <p className="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-1 mt-0.5">
-                    <Banknote className="h-3.5 w-3.5" />
-                    {driverBus.price} {t('jd')}
-                  </p>
-                )}
               </div>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3 border-t border-border">
+            <div className="flex items-center gap-2">
+              <Banknote className="h-5 w-5 text-green-600" />
+              <span className="font-medium">{t('seatPrice')}</span>
+            </div>
+            {isEditingPrice ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.05"
+                  placeholder="0.50"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                  className="w-24 h-8 text-sm"
+                  data-testid="input-edit-price"
+                />
+                <span className="text-xs text-muted-foreground">{t('jd')}</span>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={handleSavePrice} data-testid="button-save-price">
+                  <Check className="h-4 w-4 text-green-600" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsEditingPrice(false)} data-testid="button-cancel-price">
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-green-600 dark:text-green-400">
+                  {driverBus.price != null ? `${driverBus.price} ${t('jd')}` : t('notSet')}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0"
+                  onClick={() => {
+                    setEditPrice(driverBus.price != null ? String(driverBus.price) : "");
+                    setIsEditingPrice(true);
+                  }}
+                  data-testid="button-edit-price"
+                >
+                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between py-3 border-t border-border">
@@ -538,8 +618,12 @@ export default function DriverDashboard() {
             buses={[driverBus]}
             editableWaypoints={isEditingRoute ? tempWaypoints : undefined}
             waypoints={isEditingRoute ? [] : savedWaypoints}
-            height="240px"
+            routePath={driverRoutePath}
+            routeDistanceKm={routeInfo?.distanceKm}
+            routeDurationMin={routeInfo?.durationMin}
+            height="300px"
             showUserLocation={false}
+            showHiddenBuses
             onMapClick={isEditingRoute ? handleMapClick : undefined}
             passengerPickups={!isEditingRoute ? passengerPickups : undefined}
           />
@@ -583,7 +667,7 @@ export default function DriverDashboard() {
                   size="sm"
                   variant="outline"
                   className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
-                  onClick={() => setTempWaypoints([])}
+                  onClick={() => { setTempWaypoints([]); setDriverRoutePath(undefined); setRouteInfo(null); }}
                   data-testid="button-clear-stops"
                 >
                   <Trash2 className="h-4 w-4" />
