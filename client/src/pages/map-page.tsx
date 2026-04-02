@@ -24,7 +24,7 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { apiRequest } from "@/lib/queryClient";
 import { detectGovernorate, getGovernorateName, governorateNames } from "@/lib/governorate-utils";
 import { getRouteOnRoad, isNearRoute, hasBusPassed, getDistanceMeters, type RouteResult } from "@/lib/routing-service";
-import type { Bus as BusType, Governorate } from "@shared/schema";
+import type { Bus as BusType, Governorate, RouteWaypoint } from "@shared/schema";
 
 interface RoutePoint {
   lat: number;
@@ -51,6 +51,15 @@ export default function MapPage() {
 
   const { data: buses = [], isLoading } = useQuery<BusType[]>({
     queryKey: ["/api/buses"],
+  });
+
+  const routeIsSet = fromPoint !== null && toPoint !== null;
+
+  // Fetch all bus routes (waypoints) — only when citizen has set their route
+  const { data: allBusRoutes = {} } = useQuery<Record<string, RouteWaypoint[]>>({
+    queryKey: ["/api/routes"],
+    enabled: routeIsSet,
+    refetchInterval: 15000,
   });
 
   const { data: activeReservation } = useQuery({
@@ -183,7 +192,15 @@ export default function MapPage() {
     setRouteStep(1);
   };
 
-  const routeIsSet = fromPoint !== null && toPoint !== null;
+  // Check if a bus's driver-defined route overlaps with the citizen's planned route
+  const busRouteMatchesCitizenRoute = (busId: string, citizenPath: { lat: number; lng: number }[]): boolean => {
+    const waypoints = allBusRoutes[busId];
+    if (!waypoints || waypoints.length === 0) return false;
+    // At least one bus waypoint must be physically close to the citizen's path
+    return waypoints.some(wp =>
+      isNearRoute({ lat: wp.lat, lng: wp.lng }, citizenPath, 1500)
+    );
+  };
 
   const filteredBuses = useMemo(() => {
     return buses.filter(b => {
@@ -194,26 +211,26 @@ export default function MapPage() {
         const busLng = b.currentLng;
         if (!busLat || !busLng) return false;
 
-        const busGov = b.governorate as Governorate | null;
-        const destGov = b.destinationGovernorate as Governorate | null;
+        const busWaypoints = allBusRoutes[b.id];
+        const hasDriverRoute = busWaypoints && busWaypoints.length > 0;
 
-        // Primary filter: bus destination must match the user's destination governorate
-        const headingToDestination = destGov === toPoint.gov;
-
-        // Secondary filter: bus starts from the user's departure governorate and heads toward destination
-        const onSameCorridor = busGov === fromPoint.gov && destGov === toPoint.gov;
-
-        // Fallback: if no governorate info, check physical proximity to the route path
-        const nearRouteFallback =
-          !destGov &&
-          routeResult &&
-          isNearRoute({ lat: busLat, lng: busLng }, routeResult.coordinates, 3000);
-
-        if (!headingToDestination && !onSameCorridor && !nearRouteFallback) {
-          return false;
+        if (hasDriverRoute && routeResult) {
+          // Smart match: compare driver's stops against citizen's road path
+          const routeOverlaps = busRouteMatchesCitizenRoute(b.id, routeResult.coordinates);
+          if (!routeOverlaps) return false;
+        } else {
+          // Fallback when no driver route defined: use governorate matching
+          const destGov = b.destinationGovernorate as Governorate | null;
+          const headingToDestination = destGov === toPoint.gov;
+          const nearRoute = routeResult && isNearRoute(
+            { lat: busLat, lng: busLng },
+            routeResult.coordinates,
+            3000
+          );
+          if (!headingToDestination && !nearRoute) return false;
         }
 
-        // Hide buses that have already passed the user
+        // Always hide buses that have already passed the user's position
         if (userLocation && hasBusPassed(
           { lat: busLat, lng: busLng },
           userLocation,
@@ -226,13 +243,13 @@ export default function MapPage() {
         return true;
       }
 
-      // No route set: show buses in user's governorate only
+      // No route set yet: show buses in user's governorate only
       const busGov = b.governorate as Governorate | null;
       const destGov = b.destinationGovernorate as Governorate | null;
       if (!busGov && !destGov) return true;
       return busGov === userGovernorate || destGov === userGovernorate;
     });
-  }, [buses, userGovernorate, fromPoint, toPoint, routeIsSet, routeResult, userLocation]);
+  }, [buses, userGovernorate, fromPoint, toPoint, routeIsSet, routeResult, userLocation, allBusRoutes]);
 
   const getDisplayRouteName = (bus: BusType) => {
     return language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;

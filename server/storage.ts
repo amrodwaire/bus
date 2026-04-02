@@ -28,6 +28,7 @@ export interface IStorage {
   
   // Route Waypoints
   getRouteWaypoints(busId: string): Promise<RouteWaypoint[]>;
+  getAllRouteWaypoints(): Promise<Record<string, RouteWaypoint[]>>;
   createRouteWaypoint(waypoint: InsertRouteWaypoint): Promise<RouteWaypoint>;
   deleteRouteWaypoints(busId: string): Promise<void>;
   
@@ -254,6 +255,18 @@ export class MemStorage implements IStorage {
     return Array.from(this.routeWaypoints.values())
       .filter((wp) => wp.busId === busId)
       .sort((a, b) => a.orderIndex - b.orderIndex);
+  }
+
+  async getAllRouteWaypoints(): Promise<Record<string, RouteWaypoint[]>> {
+    const result: Record<string, RouteWaypoint[]> = {};
+    for (const wp of this.routeWaypoints.values()) {
+      if (!result[wp.busId]) result[wp.busId] = [];
+      result[wp.busId].push(wp);
+    }
+    for (const busId of Object.keys(result)) {
+      result[busId].sort((a, b) => a.orderIndex - b.orderIndex);
+    }
+    return result;
   }
 
   async createRouteWaypoint(insertWaypoint: InsertRouteWaypoint): Promise<RouteWaypoint> {

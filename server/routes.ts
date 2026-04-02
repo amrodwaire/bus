@@ -149,7 +149,17 @@ export async function registerRoutes(
   });
 
   // ============ ROUTE WAYPOINTS ============
-  
+
+  // Get all bus routes (busId → waypoints[])
+  app.get("/api/routes", async (req, res) => {
+    try {
+      const allRoutes = await storage.getAllRouteWaypoints();
+      res.json(allRoutes);
+    } catch (error) {
+      res.status(500).json({ message: "حدث خطأ في الخادم" });
+    }
+  });
+
   // Get route waypoints
   app.get("/api/routes/:busId", async (req, res) => {
     try {
