@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import { divIcon } from "leaflet";
-import { Bus, MapPin } from "lucide-react";
+import { Bus } from "lucide-react";
 import type { Bus as BusType, RouteWaypoint } from "@shared/schema";
 import { useLanguage } from "@/lib/language-context";
 import "leaflet/dist/leaflet.css";
@@ -16,6 +16,9 @@ interface MapViewProps {
   showUserLocation?: boolean;
   onMapClick?: (lat: number, lng: number) => void;
   editableWaypoints?: { lat: number; lng: number }[];
+  routeFrom?: { lat: number; lng: number };
+  routeTo?: { lat: number; lng: number };
+  routeMode?: "from" | "to";
 }
 
 function MapController({ center }: { center: { lat: number; lng: number } }) {
@@ -45,51 +48,26 @@ function createBusIcon(availableSeats: number, isSelected: boolean) {
   return divIcon({
     className: 'custom-bus-marker',
     html: `
-      <div style="
-        position: relative;
-        width: 48px;
-        height: 48px;
-        ${isSelected ? 'transform: scale(1.2);' : ''}
-      ">
+      <div style="position:relative;width:48px;height:48px;${isSelected ? 'transform:scale(1.2);' : ''}">
         <div style="
-          width: 48px;
-          height: 48px;
-          background: ${bgColor};
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-          ${isSelected ? 'box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.5), 0 4px 6px rgba(0,0,0,0.3);' : ''}
+          width:48px;height:48px;background:${bgColor};border-radius:8px;
+          display:flex;align-items:center;justify-content:center;
+          box-shadow:0 4px 6px rgba(0,0,0,0.3);
+          ${isSelected ? 'box-shadow:0 0 0 4px rgba(34,197,94,0.5),0 4px 6px rgba(0,0,0,0.3);' : ''}
         ">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 6v6"/>
-            <path d="M15 6v6"/>
-            <path d="M2 12h19.6"/>
+            <path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/>
             <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/>
-            <circle cx="7" cy="18" r="2"/>
-            <path d="M9 18h5"/>
-            <circle cx="16" cy="18" r="2"/>
+            <circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/>
           </svg>
         </div>
         <div style="
-          position: absolute;
-          top: -8px;
-          right: -8px;
-          width: 24px;
-          height: 24px;
-          background: white;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 12px;
-          font-weight: bold;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          border: 1px solid #e5e5e5;
+          position:absolute;top:-8px;right:-8px;width:24px;height:24px;
+          background:white;border-radius:50%;display:flex;align-items:center;
+          justify-content:center;font-size:12px;font-weight:bold;
+          box-shadow:0 2px 4px rgba(0,0,0,0.2);border:1px solid #e5e5e5;
         ">${availableSeats}</div>
-      </div>
-    `,
+      </div>`,
     iconSize: [48, 48],
     iconAnchor: [24, 48],
     popupAnchor: [0, -48],
@@ -100,68 +78,67 @@ function createWaypointIcon(index: number, isEditable: boolean) {
   const bgColor = isEditable ? '#6366f1' : '#64748b';
   return divIcon({
     className: 'custom-waypoint-marker',
-    html: `
-      <div style="
-        width: 32px;
-        height: 32px;
-        background: ${bgColor};
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 13px;
-        font-weight: bold;
-        border: 3px solid white;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-      ">${index + 1}</div>
-    `,
+    html: `<div style="
+      width:32px;height:32px;background:${bgColor};border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      color:white;font-size:13px;font-weight:bold;
+      border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);
+    ">${index + 1}</div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
     popupAnchor: [0, -18],
   });
 }
 
+function createRoutePointIcon(type: "from" | "to") {
+  const bgColor = type === "from" ? "#22c55e" : "#ef4444";
+  const letter = type === "from" ? "A" : "B";
+  return divIcon({
+    className: `custom-route-${type}-marker`,
+    html: `
+      <div style="position:relative;width:36px;height:44px;">
+        <div style="
+          width:36px;height:36px;
+          background:${bgColor};
+          border-radius:50% 50% 50% 0;
+          transform:rotate(-45deg);
+          border:3px solid white;
+          box-shadow:0 3px 8px rgba(0,0,0,0.4);
+        "></div>
+        <div style="
+          position:absolute;top:5px;left:0;width:36px;text-align:center;
+          color:white;font-size:15px;font-weight:bold;
+          text-shadow:0 1px 2px rgba(0,0,0,0.3);
+        ">${letter}</div>
+      </div>`,
+    iconSize: [36, 44],
+    iconAnchor: [18, 44],
+    popupAnchor: [0, -44],
+  });
+}
+
 const userLocationIcon = divIcon({
   className: 'custom-user-marker',
   html: `
-    <div style="position: relative;">
+    <div style="position:relative;">
       <div style="
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 40px;
-        height: 40px;
-        background: rgba(59, 130, 246, 0.3);
-        border-radius: 50%;
-        animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+        position:absolute;top:50%;left:50%;
+        transform:translate(-50%,-50%);
+        width:40px;height:40px;
+        background:rgba(59,130,246,0.3);border-radius:50%;
+        animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;
       "></div>
       <div style="
-        width: 32px;
-        height: 32px;
-        background: #3b82f6;
-        border-radius: 50%;
-        border: 4px solid white;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        width:32px;height:32px;background:#3b82f6;border-radius:50%;
+        border:4px solid white;box-shadow:0 4px 6px rgba(0,0,0,0.3);
+        display:flex;align-items:center;justify-content:center;
       ">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="3 11 22 2 13 21 11 13 3 11"/>
         </svg>
       </div>
     </div>
-    <style>
-      @keyframes ping {
-        75%, 100% {
-          transform: translate(-50%, -50%) scale(2);
-          opacity: 0;
-        }
-      }
-    </style>
-  `,
+    <style>@keyframes ping{75%,100%{transform:translate(-50%,-50%) scale(2);opacity:0;}}</style>`,
   iconSize: [32, 32],
   iconAnchor: [16, 16],
 });
@@ -176,6 +153,9 @@ export function MapView({
   showUserLocation = true,
   onMapClick,
   editableWaypoints = [],
+  routeFrom,
+  routeTo,
+  routeMode,
 }: MapViewProps) {
   const { t } = useLanguage();
 
@@ -185,6 +165,14 @@ export function MapView({
 
   const displayWaypoints = editableWaypoints.length > 0 ? editableWaypoints : waypoints;
   const isEditable = editableWaypoints.length > 0;
+
+  const routeMapLabel = routeMode === "from"
+    ? t('tapMapForStart')
+    : routeMode === "to"
+      ? t('tapMapForEnd')
+      : onMapClick
+        ? t('clickMapToAddStop')
+        : null;
 
   return (
     <div
@@ -206,38 +194,40 @@ export function MapView({
         {onMapClick && <MapClickHandler onMapClick={onMapClick} />}
 
         {showUserLocation && userLocation && (
-          <Marker
-            position={[userLocation.lat, userLocation.lng]}
-            icon={userLocationIcon}
-          >
+          <Marker position={[userLocation.lat, userLocation.lng]} icon={userLocationIcon}>
             <Popup>{t('yourLocation')}</Popup>
+          </Marker>
+        )}
+
+        {/* Route from/to markers */}
+        {routeFrom && (
+          <Marker position={[routeFrom.lat, routeFrom.lng]} icon={createRoutePointIcon("from")}>
+            <Popup><div className="text-center font-bold text-green-600">{t('from')}</div></Popup>
+          </Marker>
+        )}
+        {routeTo && (
+          <Marker position={[routeTo.lat, routeTo.lng]} icon={createRoutePointIcon("to")}>
+            <Popup><div className="text-center font-bold text-red-600">{t('to')}</div></Popup>
           </Marker>
         )}
 
         {visibleBuses.map((bus) => {
           const availableSeats = bus.totalCapacity - bus.currentPassengers;
           const isSelected = selectedBusId === bus.id;
-
           return (
             <Marker
               key={bus.id}
               position={[bus.currentLat!, bus.currentLng!]}
               icon={createBusIcon(availableSeats, isSelected)}
-              eventHandlers={{
-                click: () => onBusClick?.(bus),
-              }}
+              eventHandlers={{ click: () => onBusClick?.(bus) }}
             >
               <Popup>
                 <div className="text-center p-2">
                   <h3 className="font-bold text-base">{bus.routeName}</h3>
                   <p className="text-sm text-gray-600">{bus.plateNumber}</p>
-                  <p className="text-sm mt-1">
-                    {availableSeats} {t('availableSeats')}
-                  </p>
+                  <p className="text-sm mt-1">{availableSeats} {t('availableSeats')}</p>
                   {bus.price != null && (
-                    <p className="text-sm font-semibold text-green-600 mt-1">
-                      {bus.price} {t('jd')}
-                    </p>
+                    <p className="text-sm font-semibold text-green-600 mt-1">{bus.price} {t('jd')}</p>
                   )}
                 </div>
               </Popup>
@@ -247,7 +237,7 @@ export function MapView({
 
         {displayWaypoints.map((wp, index) => (
           <Marker
-            key={`wp-${index}-${('id' in wp) ? (wp as any).id : index}`}
+            key={`wp-${index}`}
             position={[wp.lat, wp.lng]}
             icon={createWaypointIcon(index, isEditable)}
           >
@@ -263,13 +253,15 @@ export function MapView({
         ))}
       </MapContainer>
 
-      {onMapClick && (
-        <div className="absolute top-2 left-2 z-[1000] bg-indigo-600 text-white text-xs px-2 py-1 rounded-md shadow">
-          {t('clickMapToAddStop')}
+      {routeMapLabel && (
+        <div className={`absolute top-2 left-2 z-[1000] text-white text-xs px-2 py-1 rounded-md shadow ${
+          routeMode === "from" ? "bg-green-600" : routeMode === "to" ? "bg-red-500" : "bg-indigo-600"
+        }`}>
+          {routeMapLabel}
         </div>
       )}
 
-      {visibleBuses.length === 0 && !onMapClick && (
+      {visibleBuses.length === 0 && !onMapClick && !routeFrom && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-[1000]">
           <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-3">
             <Bus className="h-8 w-8 text-muted-foreground" />

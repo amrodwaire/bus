@@ -1,16 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bus, MapPin, X, Check, AlertCircle, ArrowRight, Navigation2 } from "lucide-react";
+import { Bus, MapPin, X, Check, AlertCircle, Navigation2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -30,13 +23,12 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { apiRequest } from "@/lib/queryClient";
 import { detectGovernorate, getGovernorateName, governorateNames } from "@/lib/governorate-utils";
-import { jordanGovernorates } from "@shared/schema";
 import type { Bus as BusType, Governorate } from "@shared/schema";
 
-interface TripRoute {
-  from: string;
-  to: string;
-  isSet: boolean;
+interface RoutePoint {
+  lat: number;
+  lng: number;
+  gov: Governorate;
 }
 
 export default function MapPage() {
@@ -50,17 +42,15 @@ export default function MapPage() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [userGovernorate, setUserGovernorate] = useState<Governorate>("amman");
 
-  // Trip route state — session only (resets on refresh)
-  const [tripRoute, setTripRoute] = useState<TripRoute>({ from: "", to: "", isSet: false });
-  const [routeFrom, setRouteFrom] = useState("");
-  const [routeTo, setRouteTo] = useState("");
+  // Map-based trip route — 0=idle, 1=picking from, 2=picking to
+  const [routeStep, setRouteStep] = useState<0 | 1 | 2>(0);
+  const [fromPoint, setFromPoint] = useState<RoutePoint | null>(null);
+  const [toPoint, setToPoint] = useState<RoutePoint | null>(null);
 
-  // Fetch available buses
   const { data: buses = [], isLoading } = useQuery<BusType[]>({
     queryKey: ["/api/buses"],
   });
 
-  // Fetch user's active reservation
   const { data: activeReservation } = useQuery({
     queryKey: ["/api/reservations/user", user?.id, "active"],
     queryFn: () =>
@@ -70,7 +60,6 @@ export default function MapPage() {
 
   const hasActiveReservation = !!activeReservation;
 
-  // Get user location and detect governorate
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -78,21 +67,16 @@ export default function MapPage() {
           const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
           setUserLocation(loc);
           const gov = detectGovernorate(loc.lat, loc.lng);
-          if (gov) {
-            setUserGovernorate(gov);
-            if (!routeFrom) setRouteFrom(gov);
-          }
+          if (gov) setUserGovernorate(gov);
         },
         () => {
           setUserLocation({ lat: 31.9539, lng: 35.9106 });
           setUserGovernorate("amman");
-          if (!routeFrom) setRouteFrom("amman");
         }
       );
     }
   }, []);
 
-  // Create reservation mutation
   const reserveMutation = useMutation({
     mutationFn: async (busId: string) => {
       return apiRequest("POST", "/api/reservations", {
@@ -123,52 +107,58 @@ export default function MapPage() {
   const handleReserve = (bus: BusType) => { setSelectedBus(bus); setShowReservationDialog(true); };
   const confirmReservation = () => { if (selectedBus && user) reserveMutation.mutate(selectedBus.id); };
 
-  const handleSetRoute = () => {
-    if (!routeFrom || !routeTo) {
-      toast({ title: t('fillAllFields'), variant: "destructive" });
-      return;
+  // Handle map click for route selection
+  const handleMapClick = (lat: number, lng: number) => {
+    if (routeStep === 1) {
+      const clickedGov = detectGovernorate(lat, lng) ?? "amman";
+      // Validate: from point must be in user's governorate
+      if (clickedGov !== userGovernorate) {
+        toast({
+          title: t('locationMismatch'),
+          description: t('locationMismatchDesc')
+            .replace('{current}', getGovLabel(userGovernorate))
+            .replace('{selected}', getGovLabel(clickedGov)),
+          variant: "destructive",
+        });
+        return;
+      }
+      setFromPoint({ lat, lng, gov: clickedGov });
+      setRouteStep(2);
+    } else if (routeStep === 2) {
+      const clickedGov = detectGovernorate(lat, lng) ?? "amman";
+      setToPoint({ lat, lng, gov: clickedGov });
+      setRouteStep(0);
     }
-    if (routeFrom === routeTo) {
-      toast({ title: t('error'), description: t('fillAllFields'), variant: "destructive" });
-      return;
-    }
-    // Block if user is not in the selected departure governorate
-    if (routeFrom !== userGovernorate) {
-      toast({
-        title: t('locationMismatch'),
-        description: t('locationMismatchDesc')
-          .replace('{current}', getGovLabel(userGovernorate))
-          .replace('{selected}', getGovLabel(routeFrom)),
-        variant: "destructive",
-      });
-      return;
-    }
-    setTripRoute({ from: routeFrom, to: routeTo, isSet: true });
   };
 
   const handleClearRoute = () => {
-    setTripRoute({ from: "", to: "", isSet: false });
-    setRouteFrom(userGovernorate);
-    setRouteTo("");
+    setFromPoint(null);
+    setToPoint(null);
+    setRouteStep(0);
   };
 
-  // Filter buses: if route is set → exact match; otherwise → governorate-based
+  const handleStartSetting = () => {
+    setFromPoint(null);
+    setToPoint(null);
+    setRouteStep(1);
+  };
+
+  const routeIsSet = fromPoint !== null && toPoint !== null;
+
   const filteredBuses = useMemo(() => {
     return buses.filter(b => {
       if (!b.isVisible) return false;
 
-      if (tripRoute.isSet) {
-        // Show only buses that match the citizen's exact route
-        return b.governorate === tripRoute.from && b.destinationGovernorate === tripRoute.to;
+      if (routeIsSet && fromPoint && toPoint) {
+        return b.governorate === fromPoint.gov && b.destinationGovernorate === toPoint.gov;
       }
 
-      // Default: show buses in user's governorate or passing through it
       const busGov = b.governorate as Governorate | null;
       const destGov = b.destinationGovernorate as Governorate | null;
       if (!busGov && !destGov) return true;
       return busGov === userGovernorate || destGov === userGovernorate;
     });
-  }, [buses, userGovernorate, tripRoute]);
+  }, [buses, userGovernorate, fromPoint, toPoint, routeIsSet]);
 
   const getDisplayRouteName = (bus: BusType) => {
     return language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
@@ -179,6 +169,10 @@ export default function MapPage() {
     if (!entry) return gov;
     return language === "en" ? entry.en : entry.ar;
   };
+
+  const routeLabel = routeIsSet && fromPoint && toPoint
+    ? `${getGovLabel(fromPoint.gov)} → ${getGovLabel(toPoint.gov)}`
+    : null;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -192,9 +186,7 @@ export default function MapPage() {
             <div>
               <h1 className="font-bold text-lg">{t('appName')}</h1>
               <p className="text-xs text-muted-foreground">
-                {tripRoute.isSet
-                  ? `${getGovLabel(tripRoute.from)} → ${getGovLabel(tripRoute.to)}`
-                  : t('availableBuses')}
+                {routeLabel ?? t('availableBuses')}
               </p>
             </div>
           </div>
@@ -212,81 +204,69 @@ export default function MapPage() {
       {/* Trip Route Selector (Citizens only) */}
       {user?.role === "citizen" && (
         <section className="px-4 pt-4">
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold flex items-center gap-2 text-sm">
-                <Navigation2 className="h-4 w-4 text-primary" />
-                {t('setTripRoute')}
-              </h3>
-              {tripRoute.isSet && (
-                <Badge variant="default" className="gap-1 text-xs">
-                  <Check className="h-3 w-3" />
-                  {t('tripRouteSet')}
-                </Badge>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex-1 min-w-[120px]">
-                <Select value={routeFrom} onValueChange={setRouteFrom}>
-                  <SelectTrigger className="h-9" data-testid="select-trip-from">
-                    <SelectValue placeholder={t('from')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {jordanGovernorates.map((gov) => (
-                      <SelectItem key={gov} value={gov}>
-                        {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <Card className="p-3">
+            {/* Idle — no route set */}
+            {!routeIsSet && routeStep === 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-sm flex items-center gap-2">
+                    <Navigation2 className="h-4 w-4 text-primary" />
+                    {t('setTripRoute')}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t('clickMapToSetRoute')}</p>
+                </div>
+                <Button size="sm" onClick={handleStartSetting} data-testid="button-start-route">
+                  {t('setRoute')}
+                </Button>
               </div>
+            )}
 
-              <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-
-              <div className="flex-1 min-w-[120px]">
-                <Select value={routeTo} onValueChange={setRouteTo}>
-                  <SelectTrigger className="h-9" data-testid="select-trip-to">
-                    <SelectValue placeholder={t('to')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {jordanGovernorates.filter(g => g !== routeFrom).map((gov) => (
-                      <SelectItem key={gov} value={gov}>
-                        {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Step 1 — picking from */}
+            {routeStep === 1 && (
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">A</div>
+                <p className="text-sm font-medium flex-1">{t('tapMapForStart')}</p>
+                <Button size="icon" variant="ghost" onClick={() => setRouteStep(0)} data-testid="button-cancel-route-step">
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
+            )}
 
-              {tripRoute.isSet ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleClearRoute}
-                  data-testid="button-clear-route"
-                  className="flex-shrink-0 gap-1"
-                >
+            {/* Step 2 — from is set, picking to */}
+            {routeStep === 2 && fromPoint && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">A</div>
+                  <span className="text-sm font-medium">{getGovLabel(fromPoint.gov)}</span>
+                  <Button size="icon" variant="ghost" className="h-6 w-6 ms-auto" onClick={() => { setFromPoint(null); setRouteStep(1); }}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">B</div>
+                  <span className="text-sm text-muted-foreground">{t('tapMapForEnd')}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Done — both points set */}
+            {routeIsSet && fromPoint && toPoint && routeStep === 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">A</div>
+                    <span className="text-sm font-semibold">{getGovLabel(fromPoint.gov)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">B</div>
+                    <span className="text-sm font-semibold">{getGovLabel(toPoint.gov)}</span>
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" onClick={handleClearRoute} data-testid="button-clear-route" className="gap-1">
                   <X className="h-3.5 w-3.5" />
                   {t('clearRoute')}
                 </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  onClick={handleSetRoute}
-                  data-testid="button-set-route"
-                  className="flex-shrink-0"
-                  disabled={!routeFrom || !routeTo}
-                >
-                  {t('setRoute')}
-                </Button>
-              )}
-            </div>
-
-            {tripRoute.isSet && (
-              <p className="text-xs text-primary mt-2 font-medium">
-                {t('showingBusesOn')}: {getGovLabel(tripRoute.from)} → {getGovLabel(tripRoute.to)}
-              </p>
+              </div>
             )}
           </Card>
         </section>
@@ -297,9 +277,13 @@ export default function MapPage() {
         <MapView
           buses={filteredBuses}
           userLocation={userLocation}
-          onBusClick={handleBusClick}
+          onBusClick={routeStep === 0 ? handleBusClick : undefined}
           selectedBusId={selectedBus?.id}
           height="280px"
+          onMapClick={routeStep > 0 ? handleMapClick : undefined}
+          routeFrom={fromPoint ?? undefined}
+          routeTo={toPoint ?? undefined}
+          routeMode={routeStep === 1 ? "from" : routeStep === 2 ? "to" : undefined}
         />
       </section>
 
@@ -317,7 +301,7 @@ export default function MapPage() {
       <section className="px-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-lg">
-            {tripRoute.isSet ? t('showingBusesOn') : t('nearbyBuses')}
+            {routeIsSet ? t('showingBusesOn') : t('nearbyBuses')}
           </h2>
           <Badge variant="outline">{filteredBuses.length} {t('bus')}</Badge>
         </div>
@@ -330,19 +314,13 @@ export default function MapPage() {
               <Bus className="h-8 w-8 text-muted-foreground" />
             </div>
             <h3 className="font-semibold mb-2">
-              {tripRoute.isSet ? t('noBusesOnRoute') : t('noBusesAvailable')}
+              {routeIsSet ? t('noBusesOnRoute') : t('noBusesAvailable')}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {tripRoute.isSet ? t('noBusesOnRouteDesc') : t('busesWillAppear')}
+              {routeIsSet ? t('noBusesOnRouteDesc') : t('busesWillAppear')}
             </p>
-            {tripRoute.isSet && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleClearRoute}
-                className="mt-4"
-                data-testid="button-clear-route-empty"
-              >
+            {routeIsSet && (
+              <Button size="sm" variant="outline" onClick={handleClearRoute} className="mt-4" data-testid="button-clear-route-empty">
                 <X className="h-4 w-4" />
                 {t('clearRoute')}
               </Button>
@@ -385,12 +363,7 @@ export default function MapPage() {
                   )}
                 </div>
               </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setSelectedBus(null)}
-                data-testid="button-close-bus-details"
-              >
+              <Button size="icon" variant="ghost" onClick={() => setSelectedBus(null)} data-testid="button-close-bus-details">
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -449,18 +422,10 @@ export default function MapPage() {
           )}
 
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowReservationDialog(false)}
-              data-testid="button-cancel-reservation"
-            >
+            <Button variant="outline" onClick={() => setShowReservationDialog(false)} data-testid="button-cancel-reservation">
               {t('cancelReservation')}
             </Button>
-            <Button
-              onClick={confirmReservation}
-              disabled={reserveMutation.isPending}
-              data-testid="button-confirm-reservation"
-            >
+            <Button onClick={confirmReservation} disabled={reserveMutation.isPending} data-testid="button-confirm-reservation">
               {reserveMutation.isPending ? t('processing') : (
                 <><Check className="h-4 w-4" />{t('confirmReservation')}</>
               )}

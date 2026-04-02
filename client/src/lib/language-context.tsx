@@ -238,6 +238,9 @@ const translations: Record<Language, Record<string, string>> = {
     locationMismatch: "اختر موقعاً أقرب إليك",
     locationMismatchDesc: "موقعك الحالي في {current}. لا يمكنك الانطلاق من {selected} لأنها بعيدة عن موقعك الحالي.",
     continueAnyway: "متابعة على أي حال",
+    clickMapToSetRoute: "اضغط الزر لتحديد مسارك مباشرة على الخريطة",
+    tapMapForStart: "اضغط على الخريطة لتحديد نقطة انطلاقك",
+    tapMapForEnd: "اضغط على الخريطة لتحديد وجهتك",
 
     // Driver waypoints
     stop: "محطة",
@@ -481,6 +484,9 @@ const translations: Record<Language, Record<string, string>> = {
     locationMismatch: "Select a closer location",
     locationMismatchDesc: "You are currently in {current}. You cannot depart from {selected} because it is far from your current location.",
     continueAnyway: "Continue anyway",
+    clickMapToSetRoute: "Tap the button to pin your route directly on the map",
+    tapMapForStart: "Tap on the map to set your departure point",
+    tapMapForEnd: "Tap on the map to set your destination",
 
     // Driver waypoints
     stop: "Stop",
