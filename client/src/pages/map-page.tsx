@@ -93,6 +93,23 @@ export default function MapPage() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  const cancelMutation = useMutation({
+    mutationFn: async (reservationId: string) => {
+      return apiRequest("PATCH", `/api/reservations/${reservationId}`, {
+        status: "cancelled",
+      });
+    },
+    onSuccess: () => {
+      toast({ title: t('reservationCancelled'), description: t('reservationCancelledDesc') });
+      queryClient.invalidateQueries({ queryKey: ["/api/buses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reservations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reservations/user", user?.id, "active"] });
+    },
+    onError: () => {
+      toast({ title: t('error'), description: t('cancelFailed'), variant: "destructive" });
+    },
+  });
+
   const reserveMutation = useMutation({
     mutationFn: async (busId: string) => {
       return apiRequest("POST", "/api/reservations", {
@@ -360,10 +377,12 @@ export default function MapPage() {
                     </div>
                   )}
                 </div>
-                <Button size="sm" variant="outline" onClick={handleClearRoute} data-testid="button-clear-route" className="gap-1">
-                  <X className="h-3.5 w-3.5" />
-                  {t('clearRoute')}
-                </Button>
+                {!hasActiveReservation && (
+                  <Button size="sm" variant="outline" onClick={handleClearRoute} data-testid="button-clear-route" className="gap-1">
+                    <X className="h-3.5 w-3.5" />
+                    {t('clearRoute')}
+                  </Button>
+                )}
               </div>
             )}
           </Card>
@@ -388,13 +407,27 @@ export default function MapPage() {
         />
       </section>
 
-      {/* Active Reservation Notice */}
+      {/* Active Reservation Notice + Cancel */}
       {hasActiveReservation && user?.role === "citizen" && (
         <section className="px-4 pb-2">
-          <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-sm">
-            <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-            <p className="text-yellow-800 dark:text-yellow-300">{t('hasActiveReservationNotice')}</p>
-          </div>
+          <Card className="p-3 border-yellow-500/40 bg-yellow-500/10">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">{t('hasActiveReservationNotice')}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => activeReservation?.id && cancelMutation.mutate(activeReservation.id)}
+                disabled={cancelMutation.isPending}
+                data-testid="button-cancel-active-reservation"
+                className="flex-shrink-0"
+              >
+                {cancelMutation.isPending ? t('processing') : t('cancelBooking')}
+              </Button>
+            </div>
+          </Card>
         </section>
       )}
 
@@ -420,7 +453,7 @@ export default function MapPage() {
             <p className="text-sm text-muted-foreground">
               {routeIsSet ? t('noBusesOnRouteDesc') : t('busesWillAppear')}
             </p>
-            {routeIsSet && (
+            {routeIsSet && !hasActiveReservation && (
               <Button size="sm" variant="outline" onClick={handleClearRoute} className="mt-4" data-testid="button-clear-route-empty">
                 <X className="h-4 w-4" />
                 {t('clearRoute')}
