@@ -141,16 +141,18 @@ export default function DriverDashboard() {
     let lastLat: number | null = null;
     let lastLng: number | null = null;
 
+    let lastSendTime = 0;
     const sendLocation = (lat: number, lng: number) => {
-      // Only send if moved more than ~10m
       if (
         lastLat !== null &&
         Math.abs(lat - lastLat) < 0.0001 &&
         Math.abs(lng - lastLng!) < 0.0001
       ) return;
+      const now = Date.now();
+      if (now - lastSendTime < 10000) return;
+      lastSendTime = now;
       lastLat = lat;
       lastLng = lng;
-      // Silent background update — no toast, no cache invalidation
       apiRequest("PATCH", `/api/buses/${driverBus.id}`, {
         currentLat: lat,
         currentLng: lng,

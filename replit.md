@@ -8,12 +8,14 @@ MVP complete with:
 - User authentication (citizen and driver registration)
 - Real interactive map with React-Leaflet and OpenStreetMap
 - Reservation system with priority-based booking (one active reservation per user)
+- **Auto-cancel reservation** — if passenger moves >100m from pickup point, reservation cancels automatically (GPS-verified, no false triggers on default coordinates)
 - Driver dashboard for capacity management with governorate selection
+- **Driver live GPS tracking** — silent background location updates with 10-second throttle to prevent server overload
 - **Citizen trip route selector** — click-on-map to pin departure (A) and destination (B) points; road-following route via OSRM API; smart bus filtering (near-route + hides buses that already passed the user); shows distance/duration
 - **Driver waypoint management** — click-on-map to add route stops, save/clear, numbered markers
 - **Seat pricing** — drivers set price per seat (in JD), shown on bus cards and reservation dialog
 - Issue reporting system
-- **Bilingual support (Arabic/English)** with language toggle and full RTL/LTR support
+- **Bilingual support (Arabic/English)** with language toggle, full RTL/LTR support, and variable interpolation in translations
 - Governorate-based bus filtering (user sees buses in their governorate)
 - Demo credentials shown on login page
 

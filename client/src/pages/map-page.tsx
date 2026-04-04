@@ -43,6 +43,7 @@ export default function MapPage() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [userGovernorate, setUserGovernorate] = useState<Governorate>("amman");
   const autoCancelledRef = useRef(false);
+  const gpsReadyRef = useRef(false);
 
   // Map-based trip route — 0=idle, 1=picking from, 2=picking to
   const [routeStep, setRouteStep] = useState<0 | 1 | 2>(0);
@@ -82,6 +83,7 @@ export default function MapPage() {
       (position) => {
         const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
         setUserLocation(loc);
+        gpsReadyRef.current = true;
         const gov = detectGovernorate(loc.lat, loc.lng);
         if (gov) setUserGovernorate(gov);
       },
@@ -122,6 +124,7 @@ export default function MapPage() {
   // Auto-cancel reservation when passenger moves >100m from pickup
   useEffect(() => {
     if (!userLocation || !activeReservation || autoCancelledRef.current) return;
+    if (!gpsReadyRef.current) return;
     if (!activeReservation.pickupLat || !activeReservation.pickupLng) return;
 
     const dist = getDistanceMeters(

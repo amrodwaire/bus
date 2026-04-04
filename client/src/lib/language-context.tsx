@@ -5,7 +5,7 @@ type Language = "ar" | "en";
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, string>) => string;
   isRTL: boolean;
 }
 
@@ -560,8 +560,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = language;
   }, [language]);
 
-  const t = (key: string): string => {
-    return translations[language][key] || key;
+  const t = (key: string, vars?: Record<string, string>): string => {
+    let text = translations[language][key] || key;
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) {
+        text = text.replace(new RegExp(`\\{${k}\\}`, "g"), v);
+      }
+    }
+    return text;
   };
 
   const isRTL = language === "ar";

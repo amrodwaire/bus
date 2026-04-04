@@ -33,7 +33,7 @@ export function BusCard({ bus, onReserve, showReserveButton = true, compact = fa
 
   const priceLabel = bus.price != null
     ? `${bus.price} ${t('jd')}`
-    : t('free');
+    : t('notSet');
 
   if (compact) {
     return (

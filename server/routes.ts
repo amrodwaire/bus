@@ -345,15 +345,14 @@ export async function registerRoutes(
         return res.status(404).json({ message: "الحجز غير موجود" });
       }
       
-      // If cancelling, decrement passenger count and potentially show bus again
       if (status === "cancelled" && currentReservation.status !== "cancelled") {
         const bus = await storage.getBus(currentReservation.busId);
         if (bus) {
           const newPassengerCount = Math.max(0, bus.currentPassengers - 1);
-          // If bus was hidden due to being full, show it again
+          const wasFull = bus.currentPassengers >= bus.totalCapacity;
           await storage.updateBus(bus.id, {
             currentPassengers: newPassengerCount,
-            isVisible: true // Make visible again since there's now space
+            ...(wasFull ? { isVisible: true } : {})
           });
         }
       }
