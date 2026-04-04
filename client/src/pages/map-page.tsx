@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bus, MapPin, X, Check, AlertCircle, Navigation2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ export default function MapPage() {
   const [showReservationDialog, setShowReservationDialog] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [userGovernorate, setUserGovernorate] = useState<Governorate>("amman");
+  const autoCancelledRef = useRef(false);
 
   // Map-based trip route — 0=idle, 1=picking from, 2=picking to
   const [routeStep, setRouteStep] = useState<0 | 1 | 2>(0);
@@ -94,13 +95,21 @@ export default function MapPage() {
   }, []);
 
   const cancelMutation = useMutation({
-    mutationFn: async (reservationId: string) => {
+    mutationFn: async ({ reservationId }: { reservationId: string; isAuto?: boolean }) => {
       return apiRequest("PATCH", `/api/reservations/${reservationId}`, {
         status: "cancelled",
       });
     },
-    onSuccess: () => {
-      toast({ title: t('reservationCancelled'), description: t('reservationCancelledDesc') });
+    onSuccess: (_, { isAuto }) => {
+      if (isAuto) {
+        toast({
+          title: t('autoCancelTitle'),
+          description: t('autoCancelDesc'),
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: t('reservationCancelled'), description: t('reservationCancelledDesc') });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/buses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/reservations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/reservations/user", user?.id, "active"] });
@@ -109,6 +118,27 @@ export default function MapPage() {
       toast({ title: t('error'), description: t('cancelFailed'), variant: "destructive" });
     },
   });
+
+  // Auto-cancel reservation when passenger moves >100m from pickup
+  useEffect(() => {
+    if (!userLocation || !activeReservation || autoCancelledRef.current) return;
+    if (!activeReservation.pickupLat || !activeReservation.pickupLng) return;
+
+    const dist = getDistanceMeters(
+      userLocation.lat, userLocation.lng,
+      activeReservation.pickupLat, activeReservation.pickupLng
+    );
+
+    if (dist > 100) {
+      autoCancelledRef.current = true;
+      cancelMutation.mutate({ reservationId: activeReservation.id, isAuto: true });
+    }
+  }, [userLocation, activeReservation]);
+
+  // Reset auto-cancel flag when a new reservation is made
+  useEffect(() => {
+    autoCancelledRef.current = false;
+  }, [activeReservation?.id]);
 
   const reserveMutation = useMutation({
     mutationFn: async (busId: string) => {
@@ -437,7 +467,7 @@ export default function MapPage() {
               <Button
                 size="sm"
                 variant="destructive"
-                onClick={() => activeReservation?.id && cancelMutation.mutate(activeReservation.id)}
+                onClick={() => activeReservation?.id && cancelMutation.mutate({ reservationId: activeReservation.id })}
                 disabled={cancelMutation.isPending}
                 data-testid="button-cancel-active-reservation"
                 className="flex-shrink-0"
