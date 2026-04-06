@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap, useMapEvents } from "react-leaflet";
-import { divIcon, latLngBounds } from "leaflet";
+import { divIcon, latLngBounds, DomEvent } from "leaflet";
 import { Bus, Search, X, MapPin } from "lucide-react";
 import type { Bus as BusType, RouteWaypoint } from "@shared/schema";
 import { useLanguage } from "@/lib/language-context";
@@ -496,6 +496,13 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
         setResults([]);
         setIsOpen(false);
     };
+
+    useEffect(() => {
+        if (containerRef.current) {
+            DomEvent.disableClickPropagation(containerRef.current);
+            DomEvent.disableScrollPropagation(containerRef.current);
+        }
+    }, []);
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {

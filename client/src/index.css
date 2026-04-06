@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+    overflow: hidden;
+    height: 100%;
+}
+
+body {
+    overflow: hidden;
+    height: 100%;
+    margin: 0;
+}
+
+#root {
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
 /* LIGHT MODE */
 :root {
     --button-outline: rgba(0,0,0, .10);
