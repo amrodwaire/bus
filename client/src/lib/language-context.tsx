@@ -223,6 +223,9 @@ const translations: Record<Language, Record<string, string>> = {
         selectGovernorate: "اختر المحافظة",
         originGovernorate: "محافظة الانطلاق",
         destinationGovernorate: "محافظة الوجهة",
+        whereAreYouGoing: "إلى أين أنت ذاهب اليوم؟",
+        selectYourDestination: "اختر وجهتك لبدء الرحلة",
+        startTrip: "ابدأ الرحلة",
 
         // Price
         jd: "د.أ",
@@ -307,6 +310,9 @@ const translations: Record<Language, Record<string, string>> = {
         selectGovernorate: "Select governorate",
         originGovernorate: "Origin governorate",
         destinationGovernorate: "Destination governorate",
+        whereAreYouGoing: "Where are you going today?",
+        selectYourDestination: "Select your destination to start the trip",
+        startTrip: "Start Trip",
         priority: "Priority",
         status: "Status",
         confirmed: "Confirmed",

@@ -468,9 +468,8 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
         if (q.length < 2) { setResults([]); return; }
         setLoading(true);
         try {
-            const res = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${isRTL ? 'ar' : 'en'}`
-            );
+            const lang = isRTL ? "ar" : "en";
+            const res = await fetch(`/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`);
             const data: SearchResult[] = await res.json();
             setResults(data);
         } catch { setResults([]); }
