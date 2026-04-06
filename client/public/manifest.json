@@ -1,0 +1,17 @@
+{
+  "name": "????? - Coster",
+  "short_name": "Coster",
+  "description": "????? ????? ????? ???????",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

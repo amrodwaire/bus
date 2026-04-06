@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap, useMapEvents } from "react-leaflet";
 import { divIcon, latLngBounds } from "leaflet";
-import { Bus } from "lucide-react";
+import { Bus, Search, X, MapPin } from "lucide-react";
 import type { Bus as BusType, RouteWaypoint } from "@shared/schema";
 import { useLanguage } from "@/lib/language-context";
 import "leaflet/dist/leaflet.css";
@@ -225,7 +225,7 @@ export function MapView({
     reservedBusId = null,
     showHiddenBuses = false,
 }: MapViewProps) {
-    const { t } = useLanguage();
+    const { t, isRTL } = useLanguage();
 
     const defaultCenter = { lat: 31.9539, lng: 35.9106 };
     const center = userLocation || defaultCenter;
@@ -410,6 +410,7 @@ export function MapView({
                 {showUserLocation && userLocation && (
                     <RecenterButton userLocation={userLocation} />
                 )}
+                <MapSearchBar isRTL={isRTL} />
             </MapContainer>
 
             {/* Instruction label overlay */}
@@ -442,6 +443,110 @@ export function MapView({
                     <p className="text-sm text-muted-foreground">{t('busesWillAppear')}</p>
                 </div>
             )}
+        </div>
+    );
+}
+
+interface SearchResult {
+    place_id: number;
+    display_name: string;
+    lat: string;
+    lon: string;
+}
+
+function MapSearchBar({ isRTL }: { isRTL: boolean }) {
+    const map = useMap();
+    const { t } = useLanguage();
+    const [query, setQuery] = useState("");
+    const [results, setResults] = useState<SearchResult[]>([]);
+    const [isOpen, setIsOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const searchNominatim = useCallback(async (q: string) => {
+        if (q.length < 2) { setResults([]); return; }
+        setLoading(true);
+        try {
+            const res = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${isRTL ? 'ar' : 'en'}`
+            );
+            const data: SearchResult[] = await res.json();
+            setResults(data);
+        } catch { setResults([]); }
+        setLoading(false);
+    }, [isRTL]);
+
+    const handleInput = (val: string) => {
+        setQuery(val);
+        setIsOpen(true);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => searchNominatim(val), 400);
+    };
+
+    const selectResult = (r: SearchResult) => {
+        map.setView([parseFloat(r.lat), parseFloat(r.lon)], 16, { animate: true });
+        setQuery(r.display_name.split(",")[0]);
+        setIsOpen(false);
+        setResults([]);
+    };
+
+    const clear = () => {
+        setQuery("");
+        setResults([]);
+        setIsOpen(false);
+    };
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, []);
+
+    return (
+        <div ref={containerRef} className="absolute top-3 left-3 right-3 z-[1001]" style={{ direction: isRTL ? "rtl" : "ltr" }}>
+            <div className="relative">
+                <div className="flex items-center bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden">
+                    <Search className="h-4 w-4 text-muted-foreground mx-3 flex-shrink-0" />
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={(e) => handleInput(e.target.value)}
+                        onFocus={() => results.length > 0 && setIsOpen(true)}
+                        placeholder={t('searchLocation')}
+                        className="flex-1 py-2.5 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        data-testid="input-map-search"
+                    />
+                    {query && (
+                        <button onClick={clear} className="px-3 text-muted-foreground hover:text-foreground" data-testid="button-clear-search">
+                            <X className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
+
+                {isOpen && (results.length > 0 || loading) && (
+                    <div className="mt-1 bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden max-h-60 overflow-y-auto">
+                        {loading && results.length === 0 && (
+                            <div className="px-4 py-3 text-sm text-muted-foreground text-center">{t('searching')}</div>
+                        )}
+                        {results.map((r) => (
+                            <button
+                                key={r.place_id}
+                                onClick={() => selectResult(r)}
+                                className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/50 text-start transition-colors border-b border-border last:border-0"
+                                data-testid={`search-result-${r.place_id}`}
+                            >
+                                <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                                <span className="text-sm line-clamp-2">{r.display_name}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
