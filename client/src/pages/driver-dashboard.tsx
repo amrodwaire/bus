@@ -32,14 +32,6 @@ import {
 } from "@/components/ui/select";
 import { jordanGovernorates } from "@shared/schema";
 import { governorateNames } from "@/lib/governorate-utils";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/language-context";
@@ -68,8 +60,6 @@ export default function DriverDashboard() {
     const { t, language } = useLanguage();
     const queryClient = useQueryClient();
 
-    const [selectedDestination, setSelectedDestination] = useState("");
-    const [showBusDialog, setShowBusDialog] = useState(false);
     const [busFormData, setBusFormData] = useState({
         plateNumber: "",
         routeName: "",
@@ -195,7 +185,6 @@ export default function DriverDashboard() {
         onSuccess: () => {
             toast({ title: t('busCreated'), description: t('registerBusDesc') });
             queryClient.invalidateQueries({ queryKey: [`/api/buses/driver/${user?.id}`] });
-            setShowBusDialog(false);
         },
         onError: () => {
             toast({ title: t('error'), description: t('error'), variant: "destructive" });
@@ -324,83 +313,17 @@ export default function DriverDashboard() {
                         <div className="flex items-center gap-2"><LanguageToggle /><ThemeToggle /></div>
                     </div>
                 </header>
-                <div className="p-4">
-                    <Card className="p-8 text-center">
-                        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <div className="p-4 space-y-5">
+                    <div className="text-center pt-2 pb-1">
+                        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
                             <Bus className="h-8 w-8 text-primary" />
                         </div>
-                        <h2 className="font-bold text-xl mb-2">{t('noBusRegistered')}</h2>
-                        <p className="text-muted-foreground mb-6">{t('registerBusDesc')}</p>
-                        <Button onClick={() => setShowBusDialog(true)} data-testid="button-add-bus">
-                            <Plus className="h-4 w-4" />
-                            {t('registerBus')}
-                        </Button>
-                    </Card>
-                </div>
-                <Dialog open={showBusDialog} onOpenChange={setShowBusDialog}>
-                    <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
-                        <DialogHeader>
-                            <DialogTitle>{t('createBus')}</DialogTitle>
-                            <DialogDescription>{t('enterBusDetails')}</DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleCreateBus} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="plateNumber">{t('plateNumber')}</Label>
-                                <Input
-                                    id="plateNumber"
-                                    placeholder={t('examplePlate')}
-                                    value={busFormData.plateNumber}
-                                    onChange={(e) => setBusFormData({ ...busFormData, plateNumber: e.target.value })}
-                                    data-testid="input-plate-number"
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="routeName">{t('routeName')} ({t('arabic')})</Label>
-                                <Input
-                                    id="routeName"
-                                    placeholder="مثال: عمان - الزرقاء"
-                                    value={busFormData.routeName}
-                                    onChange={(e) => setBusFormData({ ...busFormData, routeName: e.target.value })}
-                                    data-testid="input-route-name"
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="routeNameEn">{t('routeName')} ({t('english')})</Label>
-                                <Input
-                                    id="routeNameEn"
-                                    placeholder="e.g. Amman - Zarqa"
-                                    value={busFormData.routeNameEn}
-                                    onChange={(e) => setBusFormData({ ...busFormData, routeNameEn: e.target.value })}
-                                    data-testid="input-route-name-en"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="capacity">{t('totalCapacity')}</Label>
-                                <Input
-                                    id="capacity"
-                                    type="number"
-                                    min="1"
-                                    max="50"
-                                    value={busFormData.totalCapacity}
-                                    onChange={(e) => setBusFormData({ ...busFormData, totalCapacity: parseInt(e.target.value) || 15 })}
-                                    data-testid="input-capacity"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="price">{t('seatPrice')} ({t('jd')})</Label>
-                                <Input
-                                    id="price"
-                                    type="number"
-                                    min="0"
-                                    step="0.05"
-                                    placeholder="0.50"
-                                    value={busFormData.price}
-                                    onChange={(e) => setBusFormData({ ...busFormData, price: e.target.value })}
-                                    data-testid="input-price"
-                                />
-                            </div>
+                        <h2 className="font-bold text-xl mb-1">{t('whereAreYouGoing')}</h2>
+                        <p className="text-muted-foreground text-sm">{t('selectYourDestination')}</p>
+                    </div>
+
+                    <form onSubmit={handleCreateBus} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-2">
                                 <Label>{t('originGovernorate')}</Label>
                                 <Select
@@ -437,67 +360,81 @@ export default function DriverDashboard() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <DialogFooter>
-                                <Button
-                                    type="submit"
-                                    disabled={createBusMutation.isPending}
-                                    data-testid="button-submit-bus"
-                                >
-                                    {createBusMutation.isPending ? t('registering') : t('createBus')}
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
-                <BottomNav />
-            </div>
-        );
-    }
+                        </div>
 
-    if (!driverBus.destinationGovernorate) {
-        return (
-            <div className="min-h-screen bg-background pb-20">
-                <header className="sticky top-0 z-40 bg-background border-b border-border">
-                    <div className="flex items-center justify-between p-4">
-                        <h1 className="font-bold text-lg">{t('driverDashboard')}</h1>
-                        <div className="flex items-center gap-2"><LanguageToggle /><ThemeToggle /></div>
-                    </div>
-                </header>
-                <div className="p-4 flex flex-col items-center justify-center" style={{ minHeight: 'calc(100vh - 140px)' }}>
-                    <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-5">
-                        <Route className="h-10 w-10 text-primary" />
-                    </div>
-                    <h2 className="font-bold text-xl mb-2 text-center">{t('whereAreYouGoing')}</h2>
-                    <p className="text-muted-foreground text-sm mb-6 text-center">{t('selectYourDestination')}</p>
-                    <div className="w-full max-w-xs space-y-4">
-                        <Select value={selectedDestination} onValueChange={setSelectedDestination}>
-                            <SelectTrigger data-testid="select-trip-destination">
-                                <SelectValue placeholder={t('destinationGovernorate')} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {jordanGovernorates.map((gov) => (
-                                    <SelectItem key={gov} value={gov}>
-                                        {language === "en" ? governorateNames[gov].en : governorateNames[gov].ar}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <Card className="p-4 space-y-4">
+                            <h3 className="font-semibold text-sm text-muted-foreground">{t('enterBusDetails')}</h3>
+                            <div className="space-y-2">
+                                <Label htmlFor="plateNumber">{t('plateNumber')}</Label>
+                                <Input
+                                    id="plateNumber"
+                                    placeholder={t('examplePlate')}
+                                    value={busFormData.plateNumber}
+                                    onChange={(e) => setBusFormData({ ...busFormData, plateNumber: e.target.value })}
+                                    data-testid="input-plate-number"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="routeName">{t('routeName')} ({t('arabic')})</Label>
+                                <Input
+                                    id="routeName"
+                                    placeholder="مثال: عمان - الزرقاء"
+                                    value={busFormData.routeName}
+                                    onChange={(e) => setBusFormData({ ...busFormData, routeName: e.target.value })}
+                                    data-testid="input-route-name"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="routeNameEn">{t('routeName')} ({t('english')})</Label>
+                                <Input
+                                    id="routeNameEn"
+                                    placeholder="e.g. Amman - Zarqa"
+                                    value={busFormData.routeNameEn}
+                                    onChange={(e) => setBusFormData({ ...busFormData, routeNameEn: e.target.value })}
+                                    data-testid="input-route-name-en"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-2">
+                                    <Label htmlFor="capacity">{t('totalCapacity')}</Label>
+                                    <Input
+                                        id="capacity"
+                                        type="number"
+                                        min="1"
+                                        max="50"
+                                        value={busFormData.totalCapacity}
+                                        onChange={(e) => setBusFormData({ ...busFormData, totalCapacity: parseInt(e.target.value) || 15 })}
+                                        data-testid="input-capacity"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="price">{t('seatPrice')} ({t('jd')})</Label>
+                                    <Input
+                                        id="price"
+                                        type="number"
+                                        min="0"
+                                        step="0.05"
+                                        placeholder="0.50"
+                                        value={busFormData.price}
+                                        onChange={(e) => setBusFormData({ ...busFormData, price: e.target.value })}
+                                        data-testid="input-price"
+                                    />
+                                </div>
+                            </div>
+                        </Card>
+
                         <Button
+                            type="submit"
                             className="w-full"
-                            disabled={!selectedDestination || updateBusMutation.isPending}
-                            onClick={() => {
-                                updateBusMutation.mutate({ destinationGovernorate: selectedDestination }, {
-                                    onSuccess: () => {
-                                        toast({ title: t('saved') });
-                                    }
-                                });
-                            }}
-                            data-testid="button-start-trip"
+                            disabled={createBusMutation.isPending || !busFormData.destinationGovernorate}
+                            data-testid="button-submit-bus"
                         >
                             <Route className="h-4 w-4" />
-                            {t('startTrip')}
+                            {createBusMutation.isPending ? t('registering') : t('startTrip')}
                         </Button>
-                    </div>
+                    </form>
                 </div>
                 <BottomNav />
             </div>

@@ -93,25 +93,7 @@ export class MemStorage implements IStorage {
         };
         this.users.set(citizenId, citizen);
 
-        // Create demo buses with bilingual names and governorate info
-        const bus1Id = randomUUID();
-        const bus1: Bus = {
-            id: bus1Id,
-            driverId: driverId,
-            plateNumber: "12-34567",
-            routeName: "باص أحمد",
-            routeNameEn: "Ahmad's Bus",
-            governorate: "amman",
-            destinationGovernorate: null,
-            totalCapacity: 15,
-            currentPassengers: 0,
-            isVisible: true,
-            currentLat: 31.9539,
-            currentLng: 35.9106,
-            price: 0.5
-        };
-        this.buses.set(bus1Id, bus1);
-
+        // Create demo buses (other drivers, not driver1 — driver1 registers fresh each session)
         const bus2Id = randomUUID();
         const bus2: Bus = {
             id: bus2Id,
