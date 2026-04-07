@@ -2,13 +2,15 @@
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import cors from "cors"; // 1. إضافة الاستيراد
+import cors from "cors";
 
 const app = express();
 
-// 2. تفعيل الـ CORS للسماح للموبايل بالاتصال
-// هذا السطر يخبر السيرفر: "اقبل الطلبات من أي مكان بما في ذلك تطبيق الـ APK"
-app.use(cors());
+// التعديل السحري: تفعيل الـ CORS مع السماح باستقبال بيانات تسجيل الدخول (الكوكيز)
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
 
 const httpServer = createServer(app);
 
