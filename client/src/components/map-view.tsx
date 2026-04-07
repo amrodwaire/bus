@@ -80,16 +80,17 @@ function createBusIcon(availableSeats: number, isSelected: boolean, speed?: numb
     const bgColor = availableSeats === 0 ? '#ef4444' : availableSeats <= 3 ? '#eab308' : '#22c55e';
     const speedBadge = speed != null && speed > 0
         ? `<div style="
-        position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);
-        background:#1a73e8;color:white;font-size:10px;font-weight:bold;
-        padding:1px 6px;border-radius:8px;white-space:nowrap;
-        box-shadow:0 1px 3px rgba(0,0,0,0.3);border:1px solid white;
-      ">${speed} km/h</div>`
+        position:absolute;top:-10px;left:-14px;
+        background:#1a73e8;color:white;font-size:9px;font-weight:bold;
+        padding:2px 5px;border-radius:8px;white-space:nowrap;
+        box-shadow:0 1px 3px rgba(0,0,0,0.3);border:1.5px solid white;
+        line-height:1.1;z-index:2;
+      ">${speed}<span style="font-size:7px;margin-inline-start:1px">km/h</span></div>`
         : '';
     return divIcon({
         className: 'custom-bus-marker',
         html: `
-      <div style="position:relative;width:48px;height:${speed ? '62' : '48'}px;${isSelected ? 'transform:scale(1.2);' : ''}">
+      <div style="position:relative;width:48px;height:48px;${isSelected ? 'transform:scale(1.2);' : ''}">
         <div style="
           width:48px;height:48px;background:${bgColor};border-radius:8px;
           display:flex;align-items:center;justify-content:center;
@@ -106,13 +107,13 @@ function createBusIcon(availableSeats: number, isSelected: boolean, speed?: numb
           position:absolute;top:-8px;right:-8px;width:24px;height:24px;
           background:white;border-radius:50%;display:flex;align-items:center;
           justify-content:center;font-size:12px;font-weight:bold;
-          box-shadow:0 2px 4px rgba(0,0,0,0.2);border:1px solid #e5e5e5;
+          box-shadow:0 2px 4px rgba(0,0,0,0.2);border:1px solid #e5e5e5;z-index:1;
         ">${availableSeats}</div>
         ${speedBadge}
       </div>`,
-        iconSize: [48, speed ? 62 : 48],
-        iconAnchor: [24, speed ? 62 : 48],
-        popupAnchor: [0, speed ? -62 : -48],
+        iconSize: [48, 48],
+        iconAnchor: [24, 48],
+        popupAnchor: [0, -48],
     });
 }
 
