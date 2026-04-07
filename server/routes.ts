@@ -4,6 +4,18 @@ import { storage } from "./storage";
 import { insertUserSchema, insertBusSchema, insertReservationSchema, insertIssueReportSchema } from "@shared/schema";
 import { z } from "zod";
 
+// ============ TRAFFIC ALERTS (Live In-Memory System) ============
+// استخدمنا ذاكرة السيرفر المؤقتة لأن بلاغات المرور تتغير باستمرار ولا داعي لتخزينها للأبد
+interface TrafficAlert {
+    id: string;
+    type: string; // 'road_closed', 'traffic_jam', 'accident'
+    lat: number;
+    lng: number;
+    reportedBy: string;
+    timestamp: number;
+}
+let trafficAlerts: TrafficAlert[] = [];
+
 export async function registerRoutes(
     httpServer: Server,
     app: Express
@@ -272,35 +284,20 @@ export async function registerRoutes(
                 }
             }
 
-            // Validate pickup location is on the route (ahead of bus)
-            // Simplified validation: check if pickup is within reasonable distance of bus
             if (bus.currentLat && bus.currentLng) {
                 const busLat = bus.currentLat;
                 const busLng = bus.currentLng;
-
-                // Calculate simple distance (in degrees, roughly)
                 const latDiff = pickupLat - busLat;
                 const lngDiff = pickupLng - busLng;
-
-                // For Jordan routes (generally north-south or east-west)
-                // Passenger should be ahead or nearby, not too far behind
-                // We use a simplified check: passenger should be within ~50km radius
-                // and ideally ahead in the general direction
                 const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
 
-                // ~0.5 degrees is roughly 50km
                 if (distance > 0.5) {
                     return res.status(400).json({
                         message: "موقعك بعيد جداً عن مسار الباص. يرجى اختيار باص أقرب إليك"
                     });
                 }
-
-                // Check if passenger is behind the bus (simplified: if latitude is significantly less)
-                // This is a simplified check - in production, you'd use actual route waypoints
-                // For demo purposes, we're lenient
             }
 
-            // Get next priority number
             const priority = await storage.getNextPriority(busId);
 
             const reservation = await storage.createReservation({
@@ -312,11 +309,9 @@ export async function registerRoutes(
                 priority
             });
 
-            // Increment passenger count on the bus
             const newPassengerCount = bus.currentPassengers + 1;
             const isFull = newPassengerCount >= bus.totalCapacity;
 
-            // Update bus: increment passengers and hide if full
             await storage.updateBus(busId, {
                 currentPassengers: newPassengerCount,
                 isVisible: isFull ? false : bus.isVisible
@@ -333,12 +328,10 @@ export async function registerRoutes(
         try {
             const { status } = req.body;
 
-            // Only allow status updates
             if (!status || !["pending", "confirmed", "completed", "cancelled"].includes(status)) {
                 return res.status(400).json({ message: "حالة غير صالحة" });
             }
 
-            // Get current reservation
             const currentReservation = await storage.getReservation(req.params.id);
             if (!currentReservation) {
                 return res.status(404).json({ message: "الحجز غير موجود" });
@@ -366,7 +359,6 @@ export async function registerRoutes(
 
     // ============ ISSUE REPORTS ============
 
-    // Create issue report
     app.post("/api/reports", async (req, res) => {
         try {
             const { category, description, userId } = req.body;
@@ -382,7 +374,6 @@ export async function registerRoutes(
                 status: "pending"
             });
 
-            // Generate ticket number
             const ticketNumber = `TKT-${Date.now().toString(36).toUpperCase()}`;
 
             res.status(201).json({ ...report, ticketNumber });
@@ -391,7 +382,6 @@ export async function registerRoutes(
         }
     });
 
-    // Get all reports (admin only in real app)
     app.get("/api/reports", async (req, res) => {
         try {
             const reports = await storage.getIssueReports();
@@ -450,6 +440,41 @@ export async function registerRoutes(
         } catch {
             res.json([]);
         }
+    });
+
+    // ============ TRAFFIC ALERTS API (NEW) ============
+
+    // إضافة بلاغ أزمة أو طريق مغلق
+    app.post("/api/traffic-alerts", (req, res) => {
+        try {
+            const { type, lat, lng, reportedBy } = req.body;
+            if (!type || lat == null || lng == null) {
+                return res.status(400).json({ message: "بيانات الموقع والنوع مطلوبة" });
+            }
+
+            const newAlert: TrafficAlert = {
+                id: `alt_${Date.now()}`,
+                type,
+                lat,
+                lng,
+                reportedBy: reportedBy || "driver",
+                timestamp: Date.now()
+            };
+
+            trafficAlerts.push(newAlert);
+            res.status(201).json(newAlert);
+        } catch (error) {
+            res.status(500).json({ message: "حدث خطأ أثناء إضافة البلاغ" });
+        }
+    });
+
+    // جلب البلاغات النشطة
+    app.get("/api/traffic-alerts", (req, res) => {
+        // تنظيف البلاغات القديمة (أقدم من ساعتين)
+        const twoHoursAgo = Date.now() - (2 * 60 * 60 * 1000);
+        trafficAlerts = trafficAlerts.filter(alert => alert.timestamp > twoHoursAgo);
+
+        res.json(trafficAlerts);
     });
 
     return httpServer;
