@@ -16,7 +16,7 @@ import {
     Banknote,
     X,
     Check,
-    AlertTriangle // تم إضافة أيقونة التنبيه
+    AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -81,7 +81,6 @@ export default function DriverDashboard() {
     const [locationTracking, setLocationTracking] = useState<"off" | "active" | "denied">("off");
     const locationUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // حالة زر التبليغ لمنع الضغط المتكرر
     const [isReporting, setIsReporting] = useState(false);
 
     const getDisplayRouteName = (bus: BusType) => {
@@ -134,7 +133,7 @@ export default function DriverDashboard() {
         }
     }, [savedWaypoints]);
 
-    // GPS tracking: update bus location as driver moves
+    // التعديل الجديد لتسريع تحديث الـ GPS
     useEffect(() => {
         if (!driverBus?.id) return;
         if (!navigator.geolocation) return;
@@ -145,16 +144,21 @@ export default function DriverDashboard() {
 
         let lastSendTime = 0;
         const sendLocation = (lat: number, lng: number) => {
+            // زدنا دقة التتبع لتستجيب للحركات البسيطة
             if (
                 lastLat !== null &&
-                Math.abs(lat - lastLat) < 0.0001 &&
-                Math.abs(lng - lastLng!) < 0.0001
+                Math.abs(lat - lastLat) < 0.00001 &&
+                Math.abs(lng - lastLng!) < 0.00001
             ) return;
+
             const now = Date.now();
-            if (now - lastSendTime < 10000) return;
+            // ارسال الموقع كل 3 ثواني بدلاً من 10 ثواني
+            if (now - lastSendTime < 3000) return;
+
             lastSendTime = now;
             lastLat = lat;
             lastLng = lng;
+
             apiRequest("PATCH", `/api/buses/${driverBus.id}`, {
                 currentLat: lat,
                 currentLng: lng,
@@ -174,7 +178,8 @@ export default function DriverDashboard() {
             (err) => {
                 if (err.code === 1) setLocationTracking("denied");
             },
-            { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+            // تحديث إعدادات الـ GPS لتقليل الاعتماد على الذاكرة القديمة
+            { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
         );
 
         return () => {
@@ -183,7 +188,6 @@ export default function DriverDashboard() {
         };
     }, [driverBus?.id]);
 
-    // دالة إرسال التبليغ عن أزمة مرورية
     const reportTrafficIssue = async (type: "road_closed" | "traffic_jam") => {
         if (!driverLocation) {
             toast({
@@ -506,7 +510,6 @@ export default function DriverDashboard() {
             </header>
 
             <div className="p-4 space-y-4">
-                {/* Bus Info + Visibility */}
                 <Card className="p-4">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
@@ -566,7 +569,6 @@ export default function DriverDashboard() {
                         )}
                     </div>
 
-                    {/* GPS tracking status */}
                     <div className="flex items-center justify-between py-3 border-t border-border">
                         <div className="flex items-center gap-2">
                             <MapPin className={`h-5 w-5 ${locationTracking === "active" ? "text-green-600" : "text-muted-foreground"}`} />
@@ -602,7 +604,6 @@ export default function DriverDashboard() {
                     </div>
                 </Card>
 
-                {/* Passenger Count */}
                 <Card className="p-4">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="font-bold flex items-center gap-2">
@@ -657,7 +658,6 @@ export default function DriverDashboard() {
                     </div>
                 </Card>
 
-                {/* كرت الإبلاغ عن حالة الطريق (التبليغ التشاركي) */}
                 <Card className="p-4">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="font-bold flex items-center gap-2">
@@ -688,7 +688,6 @@ export default function DriverDashboard() {
                     </div>
                 </Card>
 
-                {/* Route Management (Interactive Waypoints) */}
                 <Card className="p-4">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="font-bold flex items-center gap-2">
@@ -754,7 +753,6 @@ export default function DriverDashboard() {
                         citizenMarkers={!isEditingRoute ? citizenLocations : undefined}
                     />
 
-                    {/* Waypoints list */}
                     {(isEditingRoute ? tempWaypoints : savedWaypoints).length > 0 ? (
                         <div className="mt-3 space-y-2">
                             <p className="text-xs text-muted-foreground font-medium">
@@ -811,7 +809,6 @@ export default function DriverDashboard() {
                     )}
                 </Card>
 
-                {/* Reservations — passenger pickup list */}
                 <Card className="p-4">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="font-bold flex items-center gap-2">
