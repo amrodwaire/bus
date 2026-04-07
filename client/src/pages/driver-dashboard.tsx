@@ -16,6 +16,7 @@ import {
     Banknote,
     X,
     Check,
+    AlertTriangle // تم إضافة أيقونة التنبيه
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -79,6 +80,9 @@ export default function DriverDashboard() {
     const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [locationTracking, setLocationTracking] = useState<"off" | "active" | "denied">("off");
     const locationUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // حالة زر التبليغ لمنع الضغط المتكرر
+    const [isReporting, setIsReporting] = useState(false);
 
     const getDisplayRouteName = (bus: BusType) => {
         return language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
@@ -178,6 +182,41 @@ export default function DriverDashboard() {
             if (locationUpdateRef.current) clearTimeout(locationUpdateRef.current);
         };
     }, [driverBus?.id]);
+
+    // دالة إرسال التبليغ عن أزمة مرورية
+    const reportTrafficIssue = async (type: "road_closed" | "traffic_jam") => {
+        if (!driverLocation) {
+            toast({
+                title: "خطأ",
+                description: "جاري تحديد الموقع، يرجى تشغيل الـ GPS والانتظار قليلاً.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsReporting(true);
+        try {
+            await apiRequest("POST", "/api/traffic-alerts", {
+                type: type,
+                lat: driverLocation.lat,
+                lng: driverLocation.lng,
+                reportedBy: user?.id?.toString() || "driver"
+            });
+
+            toast({
+                title: type === "road_closed" ? "⛔ تم التبليغ عن طريق مغلق" : "🚗 تم التبليغ عن أزمة مرورية",
+                description: "تم تنبيه جميع المستخدمين بنجاح.",
+            });
+        } catch (error) {
+            toast({
+                title: "خطأ",
+                description: "حدث خطأ أثناء إرسال التبليغ.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsReporting(false);
+        }
+    };
 
     const createBusMutation = useMutation({
         mutationFn: async (data: typeof busFormData) => {
@@ -607,14 +646,45 @@ export default function DriverDashboard() {
                         <div className="h-3 bg-muted rounded-full overflow-hidden">
                             <div
                                 className={`h-full transition-all duration-300 ${availableSeats === 0
-                                        ? 'bg-destructive'
-                                        : availableSeats <= 3
-                                            ? 'bg-yellow-500'
-                                            : 'bg-primary'
+                                    ? 'bg-destructive'
+                                    : availableSeats <= 3
+                                        ? 'bg-yellow-500'
+                                        : 'bg-primary'
                                     }`}
                                 style={{ width: `${(driverBus.currentPassengers / driverBus.totalCapacity) * 100}%` }}
                             />
                         </div>
+                    </div>
+                </Card>
+
+                {/* كرت الإبلاغ عن حالة الطريق (التبليغ التشاركي) */}
+                <Card className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-bold flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-orange-500" />
+                            الإبلاغ عن حالة الطريق
+                        </h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">
+                        ساعد زملائك والركاب بالتبليغ عن أي عوائق في مسارك الحالي.
+                    </p>
+                    <div className="flex gap-2">
+                        <Button
+                            onClick={() => reportTrafficIssue("road_closed")}
+                            variant="destructive"
+                            className="w-full bg-red-600 hover:bg-red-700 font-bold"
+                            disabled={isReporting || !driverLocation}
+                        >
+                            ⛔ طريق مغلق
+                        </Button>
+                        <Button
+                            onClick={() => reportTrafficIssue("traffic_jam")}
+                            variant="outline"
+                            className="w-full border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950 font-bold"
+                            disabled={isReporting || !driverLocation}
+                        >
+                            🚗 أزمة مرورية
+                        </Button>
                     </div>
                 </Card>
 
