@@ -12,6 +12,12 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
+export interface CitizenLocation {
+    lat: number;
+    lng: number;
+    timestamp: number;
+}
+
 export interface IStorage {
     // Users
     getUser(id: string): Promise<User | undefined>;
@@ -44,6 +50,11 @@ export interface IStorage {
     // Issue Reports
     createIssueReport(report: InsertIssueReport): Promise<IssueReport>;
     getIssueReports(): Promise<IssueReport[]>;
+
+    // Citizen locations
+    setCitizenLocation(userId: string, loc: CitizenLocation): void;
+    getCitizenLocation(userId: string): CitizenLocation | undefined;
+    getCitizenLocationsForBus(busId: string): Promise<{ userId: string; name: string; lat: number; lng: number }[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -52,6 +63,8 @@ export class MemStorage implements IStorage {
     private routeWaypoints: Map<string, RouteWaypoint>;
     private reservations: Map<string, Reservation>;
     private issueReports: Map<string, IssueReport>;
+    private citizenLocations: Map<string, CitizenLocation>;
+    private busLastUpdate: Map<string, { lat: number; lng: number; time: number }>;
 
     constructor() {
         this.users = new Map();
@@ -59,8 +72,9 @@ export class MemStorage implements IStorage {
         this.routeWaypoints = new Map();
         this.reservations = new Map();
         this.issueReports = new Map();
+        this.citizenLocations = new Map();
+        this.busLastUpdate = new Map();
 
-        // Seed some demo data
         this.seedData();
     }
 
@@ -108,7 +122,8 @@ export class MemStorage implements IStorage {
             isVisible: true,
             currentLat: 32.0,
             currentLng: 35.85,
-            price: 1.25
+            price: 1.25,
+            speed: null
         };
         this.buses.set(bus2Id, bus2);
 
@@ -126,7 +141,8 @@ export class MemStorage implements IStorage {
             isVisible: true,
             currentLat: 31.85,
             currentLng: 35.95,
-            price: 3.0
+            price: 3.0,
+            speed: null
         };
         this.buses.set(bus3Id, bus3);
 
@@ -144,7 +160,8 @@ export class MemStorage implements IStorage {
             isVisible: true,
             currentLat: 32.55,
             currentLng: 35.85,
-            price: 0.75
+            price: 0.75,
+            speed: null
         };
         this.buses.set(bus4Id, bus4);
 
@@ -162,7 +179,8 @@ export class MemStorage implements IStorage {
             isVisible: true,
             currentLat: 32.07,
             currentLng: 36.1,
-            price: 1.0
+            price: 1.0,
+            speed: null
         };
         this.buses.set(bus5Id, bus5);
     }
@@ -223,15 +241,46 @@ export class MemStorage implements IStorage {
             isVisible: insertBus.isVisible ?? true,
             currentLat: insertBus.currentLat ?? 31.9539,
             currentLng: insertBus.currentLng ?? 35.9106,
-            price: insertBus.price ?? null
+            price: insertBus.price ?? null,
+            speed: null
         };
         this.buses.set(id, bus);
         return bus;
     }
 
+    calculateSpeed(busId: string, newLat: number, newLng: number): number | null {
+        const prev = this.busLastUpdate.get(busId);
+        const now = Date.now();
+        if (!prev) {
+            this.busLastUpdate.set(busId, { lat: newLat, lng: newLng, time: now });
+            return null;
+        }
+        const timeDiffSec = (now - prev.time) / 1000;
+        if (timeDiffSec < 3) return null;
+        const R = 6371000;
+        const dLat = ((newLat - prev.lat) * Math.PI) / 180;
+        const dLng = ((newLng - prev.lng) * Math.PI) / 180;
+        const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((prev.lat * Math.PI) / 180) *
+            Math.cos((newLat * Math.PI) / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const distMeters = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        this.busLastUpdate.set(busId, { lat: newLat, lng: newLng, time: now });
+        const speedKmh = (distMeters / timeDiffSec) * 3.6;
+        return Math.round(speedKmh);
+    }
+
     async updateBus(id: string, updates: Partial<Bus>): Promise<Bus | undefined> {
         const bus = this.buses.get(id);
         if (!bus) return undefined;
+
+        if (updates.currentLat != null && updates.currentLng != null) {
+            const speed = this.calculateSpeed(id, updates.currentLat, updates.currentLng);
+            if (speed !== null && speed < 200) {
+                updates.speed = speed;
+            }
+        }
 
         const updatedBus = { ...bus, ...updates };
         this.buses.set(id, updatedBus);
@@ -347,6 +396,33 @@ export class MemStorage implements IStorage {
     async getIssueReports(): Promise<IssueReport[]> {
         return Array.from(this.issueReports.values())
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    setCitizenLocation(userId: string, loc: CitizenLocation): void {
+        this.citizenLocations.set(userId, loc);
+    }
+
+    getCitizenLocation(userId: string): CitizenLocation | undefined {
+        return this.citizenLocations.get(userId);
+    }
+
+    async getCitizenLocationsForBus(busId: string): Promise<{ userId: string; name: string; lat: number; lng: number }[]> {
+        const activeReservations = Array.from(this.reservations.values())
+            .filter(r => r.busId === busId && (r.status === "pending" || r.status === "confirmed"));
+        const results: { userId: string; name: string; lat: number; lng: number }[] = [];
+        for (const res of activeReservations) {
+            const loc = this.citizenLocations.get(res.passengerId);
+            if (loc && Date.now() - loc.timestamp < 60000) {
+                const user = this.users.get(res.passengerId);
+                results.push({
+                    userId: res.passengerId,
+                    name: user?.fullName ?? "راكب",
+                    lat: loc.lat,
+                    lng: loc.lng,
+                });
+            }
+        }
+        return results;
     }
 }
 

@@ -1,4 +1,4 @@
-import { Bus, Users, MapPin, Banknote } from "lucide-react";
+import { Bus, Users, MapPin, Banknote, Gauge, Clock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,112 +6,126 @@ import { useLanguage } from "@/lib/language-context";
 import type { Bus as BusType } from "@shared/schema";
 
 interface BusCardProps {
-  bus: BusType;
-  onReserve?: (bus: BusType) => void;
-  showReserveButton?: boolean;
-  compact?: boolean;
-  hasActiveReservation?: boolean;
+    bus: BusType;
+    onReserve?: (bus: BusType) => void;
+    showReserveButton?: boolean;
+    compact?: boolean;
+    hasActiveReservation?: boolean;
+    etaMin?: number | null;
+    distanceKm?: number | null;
 }
 
-export function BusCard({ bus, onReserve, showReserveButton = true, compact = false, hasActiveReservation = false }: BusCardProps) {
-  const { t, language } = useLanguage();
-  const availableSeats = bus.totalCapacity - bus.currentPassengers;
+export function BusCard({ bus, onReserve, showReserveButton = true, compact = false, hasActiveReservation = false, etaMin, distanceKm }: BusCardProps) {
+    const { t, language } = useLanguage();
+    const availableSeats = bus.totalCapacity - bus.currentPassengers;
 
-  const displayRouteName = language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
-  const isFull = availableSeats <= 0;
-  const isAlmostFull = availableSeats <= 3 && availableSeats > 0;
+    const displayRouteName = language === "en" && bus.routeNameEn ? bus.routeNameEn : bus.routeName;
+    const isFull = availableSeats <= 0;
+    const isAlmostFull = availableSeats <= 3 && availableSeats > 0;
 
-  const getStatusBadge = () => {
-    if (isFull) {
-      return <Badge variant="destructive">{t('full')}</Badge>;
-    }
-    if (isAlmostFull) {
-      return <Badge className="bg-yellow-500 text-yellow-950">{t('almostFull')}</Badge>;
-    }
-    return <Badge variant="default">{t('available')}</Badge>;
-  };
+    const getStatusBadge = () => {
+        if (isFull) {
+            return <Badge variant="destructive">{t('full')}</Badge>;
+        }
+        if (isAlmostFull) {
+            return <Badge className="bg-yellow-500 text-yellow-950">{t('almostFull')}</Badge>;
+        }
+        return <Badge variant="default">{t('available')}</Badge>;
+    };
 
-  const priceLabel = bus.price != null
-    ? `${bus.price} ${t('jd')}`
-    : t('notSet');
+    const priceLabel = bus.price != null
+        ? `${bus.price} ${t('jd')}`
+        : t('notSet');
 
-  if (compact) {
-    return (
-      <Card className="p-3 hover-elevate">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-              <Bus className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="font-semibold text-sm">{displayRouteName}</p>
-              <p className="text-xs text-muted-foreground">{bus.plateNumber}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-sm">
-              <Users className="h-4 w-4" />
-              <span className="font-medium">{availableSeats}/{bus.totalCapacity}</span>
-            </div>
-            {getStatusBadge()}
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="p-4 hover-elevate">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <Bus className="h-7 w-7 text-primary" />
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-bold text-lg">{displayRouteName}</h3>
-              {getStatusBadge()}
-            </div>
-            <p className="text-sm text-muted-foreground">{bus.plateNumber}</p>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2 flex-wrap">
-              <div className="flex items-center gap-1">
-                <Users className="h-4 w-4" />
-                <span>{availableSeats} {t('availableSeats')}</span>
-              </div>
-              <div className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
-                <Banknote className="h-4 w-4" />
-                <span data-testid={`text-price-${bus.id}`}>{priceLabel}</span>
-              </div>
-              {bus.currentLat && bus.currentLng && (
-                <div className="flex items-center gap-1">
-                  <MapPin className="h-4 w-4" />
-                  <span>{t('onMap')}</span>
+    if (compact) {
+        return (
+            <Card className="p-3 hover-elevate">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
+                            <Bus className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                            <p className="font-semibold text-sm">{displayRouteName}</p>
+                            <p className="text-xs text-muted-foreground">{bus.plateNumber}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 text-sm">
+                            <Users className="h-4 w-4" />
+                            <span className="font-medium">{availableSeats}/{bus.totalCapacity}</span>
+                        </div>
+                        {getStatusBadge()}
+                    </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
+            </Card>
+        );
+    }
 
-        {showReserveButton && !isFull && onReserve && (
-          <div className="flex flex-col items-end gap-1">
-            <Button
-              onClick={() => !hasActiveReservation && onReserve(bus)}
-              data-testid={`button-reserve-bus-${bus.id}`}
-              className="flex-shrink-0"
-              disabled={hasActiveReservation}
-              variant={hasActiveReservation ? "secondary" : "default"}
-              title={hasActiveReservation ? t('hasActiveReservationTooltip') : undefined}
-            >
-              {t('reserveSeat')}
-            </Button>
-            {hasActiveReservation && (
-              <p className="text-xs text-muted-foreground text-center max-w-[140px]">
-                {t('hasActiveReservationShort')}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    </Card>
-  );
+    return (
+        <Card className="p-4 hover-elevate">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex items-start gap-4">
+                    <div className="w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Bus className="h-7 w-7 text-primary" />
+                    </div>
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-lg">{displayRouteName}</h3>
+                            {getStatusBadge()}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{bus.plateNumber}</p>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2 flex-wrap">
+                            <div className="flex items-center gap-1">
+                                <Users className="h-4 w-4" />
+                                <span>{availableSeats} {t('availableSeats')}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+                                <Banknote className="h-4 w-4" />
+                                <span data-testid={`text-price-${bus.id}`}>{priceLabel}</span>
+                            </div>
+                            {bus.speed != null && bus.speed > 0 && (
+                                <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
+                                    <Gauge className="h-4 w-4" />
+                                    <span data-testid={`text-speed-${bus.id}`}>{bus.speed} {t('kmh')}</span>
+                                </div>
+                            )}
+                            {etaMin != null && (
+                                <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
+                                    <Clock className="h-4 w-4" />
+                                    <span data-testid={`text-eta-${bus.id}`}>{t('eta')} {etaMin} {t('min')}</span>
+                                </div>
+                            )}
+                            {bus.currentLat && bus.currentLng && (
+                                <div className="flex items-center gap-1">
+                                    <MapPin className="h-4 w-4" />
+                                    <span>{t('onMap')}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {showReserveButton && !isFull && onReserve && (
+                    <div className="flex flex-col items-end gap-1">
+                        <Button
+                            onClick={() => !hasActiveReservation && onReserve(bus)}
+                            data-testid={`button-reserve-bus-${bus.id}`}
+                            className="flex-shrink-0"
+                            disabled={hasActiveReservation}
+                            variant={hasActiveReservation ? "secondary" : "default"}
+                            title={hasActiveReservation ? t('hasActiveReservationTooltip') : undefined}
+                        >
+                            {t('reserveSeat')}
+                        </Button>
+                        {hasActiveReservation && (
+                            <p className="text-xs text-muted-foreground text-center max-w-[140px]">
+                                {t('hasActiveReservationShort')}
+                            </p>
+                        )}
+                    </div>
+                )}
+            </div>
+        </Card>
+    );
 }

@@ -100,6 +100,13 @@ export default function DriverDashboard() {
         enabled: !!driverBus?.id,
     });
 
+    const { data: citizenLocations = [] } = useQuery<{ userId: string; name: string; lat: number; lng: number }[]>({
+        queryKey: ["/api/citizen/locations", driverBus?.id],
+        queryFn: () => fetch(`/api/citizen/locations/${driverBus?.id}`).then(r => r.json()),
+        enabled: !!driverBus?.id,
+        refetchInterval: 5000,
+    });
+
     const computeRoutePath = useCallback(async (points: TempWaypoint[]) => {
         if (points.length < 2) {
             setDriverRoutePath(undefined);
@@ -379,7 +386,7 @@ export default function DriverDashboard() {
                                 <Label htmlFor="routeName">{t('routeName')} ({t('arabic')})</Label>
                                 <Input
                                     id="routeName"
-                                    placeholder="مثال: عمان - الزرقاء"
+                                    placeholder={t('routeNamePlaceholder')}
                                     value={busFormData.routeName}
                                     onChange={(e) => setBusFormData({ ...busFormData, routeName: e.target.value })}
                                     data-testid="input-route-name"
@@ -390,7 +397,7 @@ export default function DriverDashboard() {
                                 <Label htmlFor="routeNameEn">{t('routeName')} ({t('english')})</Label>
                                 <Input
                                     id="routeNameEn"
-                                    placeholder="e.g. Amman - Zarqa"
+                                    placeholder={t('routeNameEnPlaceholder')}
                                     value={busFormData.routeNameEn}
                                     onChange={(e) => setBusFormData({ ...busFormData, routeNameEn: e.target.value })}
                                     data-testid="input-route-name-en"
@@ -674,6 +681,7 @@ export default function DriverDashboard() {
                         showHiddenBuses
                         onMapClick={isEditingRoute ? handleMapClick : undefined}
                         passengerPickups={!isEditingRoute ? passengerPickups : undefined}
+                        citizenMarkers={!isEditingRoute ? citizenLocations : undefined}
                     />
 
                     {/* Waypoints list */}
@@ -780,6 +788,11 @@ export default function DriverDashboard() {
                             {pendingReservations.length > 0 && (
                                 <p className="text-xs text-center text-muted-foreground pt-1">
                                     {t('passengersOnMap')}
+                                    {citizenLocations.length > 0 && (
+                                        <span className="inline-flex items-center gap-1 mx-1 text-orange-600 dark:text-orange-400 font-semibold">
+                                            ({citizenLocations.length} {t('onMap')})
+                                        </span>
+                                    )}
                                 </p>
                             )}
                         </div>

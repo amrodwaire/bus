@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bus, MapPin, X, Check, AlertCircle, Navigation2 } from "lucide-react";
+import { Bus, MapPin, X, Check, AlertCircle, Navigation2, Filter, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,7 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { apiRequest } from "@/lib/queryClient";
 import { detectGovernorate, getGovernorateName, governorateNames } from "@/lib/governorate-utils";
-import { getRouteOnRoad, isNearRoute, hasBusPassed, getDistanceMeters, type RouteResult } from "@/lib/routing-service";
+import { getRouteOnRoad, getWalkingRoute, findNearestWaypoint, isNearRoute, hasBusPassed, getDistanceMeters, type RouteResult } from "@/lib/routing-service";
 import type { Bus as BusType, Governorate, RouteWaypoint } from "@shared/schema";
 
 interface RoutePoint {
@@ -45,11 +45,14 @@ export default function MapPage() {
     const autoCancelledRef = useRef(false);
     const gpsReadyRef = useRef(false);
 
-    // Map-based trip route — 0=idle, 1=picking from, 2=picking to
     const [routeStep, setRouteStep] = useState<0 | 1 | 2>(0);
     const [fromPoint, setFromPoint] = useState<RoutePoint | null>(null);
     const [toPoint, setToPoint] = useState<RoutePoint | null>(null);
     const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
+    const [walkingPath, setWalkingPath] = useState<[number, number][] | undefined>(undefined);
+    const [walkingInfo, setWalkingInfo] = useState<{ distanceKm: number; durationMin: number } | null>(null);
+    const busApproachNotifiedRef = useRef<string | null>(null);
+    const citizenLocationSentRef = useRef(0);
 
     const { data: buses = [], isLoading } = useQuery<BusType[]>({
         queryKey: ["/api/buses"],
@@ -138,10 +141,68 @@ export default function MapPage() {
         }
     }, [userLocation, activeReservation]);
 
-    // Reset auto-cancel flag when a new reservation is made
     useEffect(() => {
         autoCancelledRef.current = false;
+        busApproachNotifiedRef.current = null;
     }, [activeReservation?.id]);
+
+    useEffect(() => {
+        if (!userLocation || !user?.id || user.role !== "citizen") return;
+        if (!hasActiveReservation) return;
+        const now = Date.now();
+        if (now - citizenLocationSentRef.current < 10000) return;
+        citizenLocationSentRef.current = now;
+        fetch("/api/citizen/location", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id, lat: userLocation.lat, lng: userLocation.lng }),
+        }).catch(() => { });
+    }, [userLocation, user?.id, hasActiveReservation]);
+
+    useEffect(() => {
+        if (!userLocation || !hasActiveReservation || !activeReservation?.busId) return;
+        const reservedBus = buses.find(b => b.id === activeReservation.busId);
+        if (!reservedBus?.currentLat || !reservedBus?.currentLng) return;
+        const dist = getDistanceMeters(
+            userLocation.lat, userLocation.lng,
+            reservedBus.currentLat, reservedBus.currentLng
+        );
+        if (dist < 500 && busApproachNotifiedRef.current !== reservedBus.id) {
+            busApproachNotifiedRef.current = reservedBus.id;
+            toast({
+                title: t('busApproaching'),
+                description: t('busApproachingDesc'),
+            });
+        }
+    }, [userLocation, buses, activeReservation]);
+
+    useEffect(() => {
+        if (!fromPoint || !hasActiveReservation || !activeReservation?.busId) return;
+        const busWaypoints = allBusRoutes[activeReservation.busId];
+        if (!busWaypoints || busWaypoints.length === 0) {
+            setWalkingPath(undefined);
+            setWalkingInfo(null);
+            return;
+        }
+        const nearest = findNearestWaypoint(fromPoint, busWaypoints.map(wp => ({ lat: wp.lat, lng: wp.lng })));
+        if (!nearest || nearest.distanceM < 100) {
+            setWalkingPath(undefined);
+            setWalkingInfo(null);
+            return;
+        }
+        getWalkingRoute(fromPoint, nearest).then(result => {
+            if (result) {
+                setWalkingPath(result.coordinates);
+                setWalkingInfo({ distanceKm: result.distanceKm, durationMin: result.durationMin });
+            } else {
+                setWalkingPath(undefined);
+                setWalkingInfo(null);
+            }
+        }).catch(() => {
+            setWalkingPath(undefined);
+            setWalkingInfo(null);
+        });
+    }, [fromPoint, activeReservation?.busId, allBusRoutes]);
 
     const reserveMutation = useMutation({
         mutationFn: async (busId: string) => {
@@ -187,10 +248,9 @@ export default function MapPage() {
     // Handle map click for route selection
     const handleMapClick = async (lat: number, lng: number) => {
         if (routeStep === 1) {
-            // Validation 1: from point must be within 100m of the user's GPS
             if (userLocation) {
                 const distFromUser = getDistanceMeters(userLocation.lat, userLocation.lng, lat, lng);
-                if (distFromUser > 100) {
+                if (distFromUser > 500) {
                     toast({
                         title: t('fromPointTooFar'),
                         description: t('fromPointTooFarDesc'),
@@ -223,16 +283,46 @@ export default function MapPage() {
             setRouteStep(0);
             if (fromPoint) {
                 const result = await getRouteOnRoad(fromPoint, newTo);
-                if (result) setRouteResult(result);
+                if (result) {
+                    setRouteResult(result);
+                    if (result.roadStatus === "blocked") {
+                        toast({ title: t('roadBlocked'), description: t('roadBlockedDesc'), variant: "destructive" });
+                    } else if (result.roadStatus === "detour") {
+                        toast({
+                            title: t('roadDetour'),
+                            description: t('roadDetourDesc').replace('{ratio}', String(result.detourRatio || '')),
+                        });
+                    }
+                } else {
+                    setRouteResult(null);
+                    toast({ title: t('roadBlocked'), description: t('roadBlockedDesc'), variant: "destructive" });
+                }
             }
         }
     };
+
+    const computeETA = useCallback((bus: BusType): number | null => {
+        if (!userLocation || !bus.currentLat || !bus.currentLng) return null;
+        const dist = getDistanceMeters(userLocation.lat, userLocation.lng, bus.currentLat, bus.currentLng);
+        const distKm = dist / 1000;
+        const speed = bus.speed && bus.speed > 0 ? bus.speed : 40;
+        const etaMin = Math.round((distKm / speed) * 60);
+        return etaMin > 0 ? etaMin : 1;
+    }, [userLocation]);
+
+    const computeDistKm = useCallback((bus: BusType): number | null => {
+        if (!userLocation || !bus.currentLat || !bus.currentLng) return null;
+        const dist = getDistanceMeters(userLocation.lat, userLocation.lng, bus.currentLat, bus.currentLng);
+        return Math.round((dist / 1000) * 10) / 10;
+    }, [userLocation]);
 
     const handleClearRoute = () => {
         setFromPoint(null);
         setToPoint(null);
         setRouteResult(null);
         setRouteStep(0);
+        setWalkingPath(undefined);
+        setWalkingInfo(null);
     };
 
     const handleStartSetting = () => {
@@ -293,11 +383,7 @@ export default function MapPage() {
                 return true;
             }
 
-            // No route set yet: show buses in user's governorate only
-            const busGov = b.governorate as Governorate | null;
-            const destGov = b.destinationGovernorate as Governorate | null;
-            if (!busGov && !destGov) return true;
-            return busGov === userGovernorate || destGov === userGovernorate;
+            return false;
         });
     }, [buses, userGovernorate, fromPoint, toPoint, routeIsSet, routeResult, userLocation, allBusRoutes]);
 
@@ -455,8 +541,73 @@ export default function MapPage() {
                     routeDurationMin={routeResult?.durationMin}
                     passengerPickups={citizenPickupMarker}
                     reservedBusId={activeReservation?.busId}
+                    walkingPath={walkingPath}
                 />
             </section>
+
+            {/* Road Status Banner */}
+            {routeResult && routeIsSet && (
+                <section className="px-4 pb-2">
+                    {routeResult.roadStatus === "blocked" ? (
+                        <Card className="p-3 border-red-500/40 bg-red-500/10" data-testid="banner-road-blocked">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0">
+                                    <ShieldX className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-red-800 dark:text-red-300">{t('roadBlocked')}</p>
+                                    <p className="text-xs text-red-600 dark:text-red-400">{t('roadBlockedDesc')}</p>
+                                </div>
+                            </div>
+                        </Card>
+                    ) : routeResult.roadStatus === "detour" ? (
+                        <Card className="p-3 border-yellow-500/40 bg-yellow-500/10" data-testid="banner-road-detour">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-yellow-500 text-white flex items-center justify-center flex-shrink-0">
+                                    <ShieldAlert className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">{t('roadDetour')}</p>
+                                    <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                                        {t('roadDetourDesc').replace('{ratio}', String(routeResult.detourRatio || ''))}
+                                    </p>
+                                </div>
+                            </div>
+                        </Card>
+                    ) : (
+                        <Card className="p-3 border-green-500/40 bg-green-500/10" data-testid="banner-road-clear">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center flex-shrink-0">
+                                    <ShieldCheck className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-green-800 dark:text-green-300">{t('roadClear')}</p>
+                                    <p className="text-xs text-green-600 dark:text-green-400">{t('roadClearDesc')}</p>
+                                </div>
+                            </div>
+                        </Card>
+                    )}
+                </section>
+            )}
+
+            {/* Walking route info */}
+            {walkingInfo && hasActiveReservation && (
+                <section className="px-4 pb-2">
+                    <Card className="p-3 border-orange-500/40 bg-orange-500/10">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center flex-shrink-0">
+                                <Navigation2 className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm font-semibold text-orange-800 dark:text-orange-300">{t('walkToStop')}</p>
+                                <p className="text-xs text-orange-600 dark:text-orange-400">
+                                    {walkingInfo.distanceKm} {t('km')} · {walkingInfo.durationMin} {t('walkMin')}
+                                </p>
+                            </div>
+                        </div>
+                    </Card>
+                </section>
+            )}
 
             {/* Active Reservation Notice + Cancel */}
             {hasActiveReservation && user?.role === "citizen" && (
@@ -493,6 +644,14 @@ export default function MapPage() {
 
                 {isLoading ? (
                     <LoadingSpinner />
+                ) : !routeIsSet && !hasActiveReservation ? (
+                    <Card className="p-8 text-center">
+                        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                            <Navigation2 className="h-8 w-8 text-primary" />
+                        </div>
+                        <h3 className="font-semibold mb-2">{t('setRouteToSeeBuses')}</h3>
+                        <p className="text-sm text-muted-foreground">{t('setRouteToSeeBusesDesc')}</p>
+                    </Card>
                 ) : filteredBuses.length === 0 ? (
                     <Card className="p-8 text-center">
                         <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
@@ -520,6 +679,8 @@ export default function MapPage() {
                                 onReserve={handleReserve}
                                 showReserveButton={user?.role === "citizen"}
                                 hasActiveReservation={hasActiveReservation}
+                                etaMin={computeETA(bus)}
+                                distanceKm={computeDistKm(bus)}
                             />
                         ))}
                     </div>
@@ -546,6 +707,18 @@ export default function MapPage() {
                                             {selectedBus.price} {t('jd')}
                                         </p>
                                     )}
+                                    <div className="flex items-center gap-3 mt-1">
+                                        {selectedBus.speed != null && selectedBus.speed > 0 && (
+                                            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                                {selectedBus.speed} {t('kmh')}
+                                            </span>
+                                        )}
+                                        {computeETA(selectedBus) && (
+                                            <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">
+                                                {t('eta')} {computeETA(selectedBus)} {t('min')}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                             <Button size="icon" variant="ghost" onClick={() => setSelectedBus(null)} data-testid="button-close-bus-details">

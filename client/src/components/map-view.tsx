@@ -14,6 +14,13 @@ export interface PassengerPickup {
     phone?: string | null;
 }
 
+export interface CitizenMarker {
+    userId: string;
+    name: string;
+    lat: number;
+    lng: number;
+}
+
 interface MapViewProps {
     buses: BusType[];
     waypoints?: RouteWaypoint[];
@@ -33,6 +40,8 @@ interface MapViewProps {
     passengerPickups?: PassengerPickup[];
     reservedBusId?: string | null;
     showHiddenBuses?: boolean;
+    walkingPath?: [number, number][];
+    citizenMarkers?: CitizenMarker[];
 }
 
 function MapController({ center, initialOnly }: { center: { lat: number; lng: number }; initialOnly?: boolean }) {
@@ -67,12 +76,20 @@ function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number
     return null;
 }
 
-function createBusIcon(availableSeats: number, isSelected: boolean) {
+function createBusIcon(availableSeats: number, isSelected: boolean, speed?: number | null) {
     const bgColor = availableSeats === 0 ? '#ef4444' : availableSeats <= 3 ? '#eab308' : '#22c55e';
+    const speedBadge = speed != null && speed > 0
+        ? `<div style="
+        position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);
+        background:#1a73e8;color:white;font-size:10px;font-weight:bold;
+        padding:1px 6px;border-radius:8px;white-space:nowrap;
+        box-shadow:0 1px 3px rgba(0,0,0,0.3);border:1px solid white;
+      ">${speed} km/h</div>`
+        : '';
     return divIcon({
         className: 'custom-bus-marker',
         html: `
-      <div style="position:relative;width:48px;height:48px;${isSelected ? 'transform:scale(1.2);' : ''}">
+      <div style="position:relative;width:48px;height:${speed ? '62' : '48'}px;${isSelected ? 'transform:scale(1.2);' : ''}">
         <div style="
           width:48px;height:48px;background:${bgColor};border-radius:8px;
           display:flex;align-items:center;justify-content:center;
@@ -91,10 +108,11 @@ function createBusIcon(availableSeats: number, isSelected: boolean) {
           justify-content:center;font-size:12px;font-weight:bold;
           box-shadow:0 2px 4px rgba(0,0,0,0.2);border:1px solid #e5e5e5;
         ">${availableSeats}</div>
+        ${speedBadge}
       </div>`,
-        iconSize: [48, 48],
-        iconAnchor: [24, 48],
-        popupAnchor: [0, -48],
+        iconSize: [48, speed ? 62 : 48],
+        iconAnchor: [24, speed ? 62 : 48],
+        popupAnchor: [0, speed ? -62 : -48],
     });
 }
 
@@ -189,6 +207,28 @@ function createPassengerPickupIcon(priority: number) {
     });
 }
 
+function createCitizenLocationIcon(name: string) {
+    return divIcon({
+        className: 'custom-citizen-marker',
+        html: `
+      <div style="position:relative;width:30px;height:30px;">
+        <div style="
+          width:30px;height:30px;background:#f97316;border-radius:50%;
+          border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);
+          display:flex;align-items:center;justify-content:center;
+        ">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="none">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+      </div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
+        popupAnchor: [0, -18],
+    });
+}
+
 const userLocationIcon = divIcon({
     className: 'custom-user-marker',
     html: `
@@ -224,6 +264,8 @@ export function MapView({
     passengerPickups = [],
     reservedBusId = null,
     showHiddenBuses = false,
+    walkingPath,
+    citizenMarkers = [],
 }: MapViewProps) {
     const { t, isRTL } = useLanguage();
 
@@ -327,6 +369,35 @@ export function MapView({
                     />
                 )}
 
+                {/* Walking route polyline */}
+                {walkingPath && walkingPath.length > 0 && (
+                    <Polyline
+                        positions={walkingPath}
+                        pathOptions={{
+                            color: '#f97316',
+                            weight: 4,
+                            opacity: 0.8,
+                            dashArray: '8, 6',
+                        }}
+                    />
+                )}
+
+                {/* Live citizen location markers (shown on driver map) */}
+                {citizenMarkers.map((cm) => (
+                    <Marker
+                        key={`citizen-${cm.userId}`}
+                        position={[cm.lat, cm.lng]}
+                        icon={createCitizenLocationIcon(cm.name)}
+                    >
+                        <Popup>
+                            <div className="text-center p-1 min-w-[100px]">
+                                <p className="font-bold text-orange-600 text-sm">{cm.name}</p>
+                                <p className="text-xs text-gray-500">{t('citizenLocation')}</p>
+                            </div>
+                        </Popup>
+                    </Marker>
+                ))}
+
                 {/* Passenger pickup markers */}
                 {passengerPickups.map((pickup, i) => (
                     <Marker
@@ -367,7 +438,7 @@ export function MapView({
                             position={[bus.currentLat!, bus.currentLng!]}
                             icon={isReserved
                                 ? createReservedBusIcon(availableSeats)
-                                : createBusIcon(availableSeats, isSelected)
+                                : createBusIcon(availableSeats, isSelected, bus.speed)
                             }
                             eventHandlers={{ click: () => onBusClick?.(bus) }}
                             zIndexOffset={isReserved ? 1000 : 0}
@@ -384,6 +455,9 @@ export function MapView({
                                     <p className="text-sm mt-1">{availableSeats} {t('availableSeats')}</p>
                                     {bus.price != null && (
                                         <p className="text-sm font-semibold text-green-600 mt-1">{bus.price} {t('jd')}</p>
+                                    )}
+                                    {bus.speed != null && bus.speed > 0 && (
+                                        <p className="text-xs text-blue-600 font-semibold mt-1">{bus.speed} {t('kmh')}</p>
                                     )}
                                 </div>
                             </Popup>
@@ -427,7 +501,7 @@ export function MapView({
 
             {/* Route distance/duration info badge */}
             {routeDistanceKm != null && routeDurationMin != null && !routeMode && (
-                <div className="absolute bottom-3 left-3 z-[1000] bg-white dark:bg-zinc-800 text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg border border-border flex items-center gap-2" data-testid="badge-route-info">
+                <div className="absolute bottom-3 start-3 z-[1000] bg-white dark:bg-zinc-800 text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg border border-border flex items-center gap-2" data-testid="badge-route-info">
                     <span className="text-blue-600 dark:text-blue-400">{routeDistanceKm} {t('km')}</span>
                     <span className="text-muted-foreground">·</span>
                     <span className="text-muted-foreground">{routeDurationMin} {t('min')}</span>
@@ -559,12 +633,13 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
 
 function RecenterButton({ userLocation }: { userLocation: { lat: number; lng: number } }) {
     const map = useMap();
+    const { t } = useLanguage();
     return (
         <button
             onClick={() => map.setView([userLocation.lat, userLocation.lng], 17, { animate: true })}
-            className="absolute bottom-5 right-3 z-[1000] bg-white dark:bg-zinc-800 rounded-full shadow-xl border-2 border-blue-400 flex items-center gap-2 px-3 py-2 hover:bg-blue-50 dark:hover:bg-zinc-700 active:scale-95 transition-all"
+            className="absolute bottom-5 end-3 z-[1000] bg-white dark:bg-zinc-800 rounded-full shadow-xl border-2 border-blue-400 flex items-center gap-2 px-3 py-2 hover:bg-blue-50 dark:hover:bg-zinc-700 active:scale-95 transition-all"
             data-testid="button-recenter-map"
-            title="My location"
+            title={t('myLocation')}
             style={{ minWidth: 44 }}
         >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -572,7 +647,7 @@ function RecenterButton({ userLocation }: { userLocation: { lat: number; lng: nu
                 <circle cx="12" cy="12" r="3" />
                 <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
             </svg>
-            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">موقعي</span>
+            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">{t('myLocation')}</span>
         </button>
     );
 }

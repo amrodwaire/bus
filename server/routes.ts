@@ -116,8 +116,7 @@ export async function registerRoutes(
                 return res.status(404).json({ message: "الباص غير موجود" });
             }
 
-            // Only allow specific fields to be updated
-            const allowedFields = ["currentPassengers", "isVisible", "currentLat", "currentLng", "routeName", "price"];
+            const allowedFields = ["currentPassengers", "isVisible", "currentLat", "currentLng", "routeName", "price", "speed"];
             const updates: Record<string, any> = {};
 
             for (const field of allowedFields) {
@@ -398,6 +397,41 @@ export async function registerRoutes(
             const reports = await storage.getIssueReports();
             res.json(reports);
         } catch (error) {
+            res.status(500).json({ message: "حدث خطأ في الخادم" });
+        }
+    });
+
+    app.post("/api/citizen/location", async (req, res) => {
+        try {
+            const { userId, lat, lng } = req.body;
+            if (!userId || lat == null || lng == null) {
+                return res.status(400).json({ message: "بيانات غير صالحة" });
+            }
+            const user = await storage.getUser(userId);
+            if (!user || user.role !== "citizen") {
+                return res.status(403).json({ message: "غير مصرح" });
+            }
+            const activeRes = await storage.getActiveReservationByUser(userId);
+            if (!activeRes) {
+                return res.status(400).json({ message: "لا يوجد حجز نشط" });
+            }
+            storage.setCitizenLocation(userId, { lat, lng, timestamp: Date.now() });
+            res.json({ ok: true });
+        } catch {
+            res.status(500).json({ message: "حدث خطأ في الخادم" });
+        }
+    });
+
+    app.get("/api/citizen/locations/:busId", async (req, res) => {
+        try {
+            const busId = req.params.busId;
+            const bus = await storage.getBus(busId);
+            if (!bus) {
+                return res.status(404).json({ message: "الباص غير موجود" });
+            }
+            const locations = await storage.getCitizenLocationsForBus(busId);
+            res.json(locations);
+        } catch {
             res.status(500).json({ message: "حدث خطأ في الخادم" });
         }
     });
