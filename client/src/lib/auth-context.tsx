@@ -16,7 +16,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+    // 👈 الرابط الثابت لسيرفرك على Render
+    const API_BASE_URL = "https://bus-p4kg.onrender.com";
 
     useEffect(() => {
         const savedUser = localStorage.getItem("coster_user");
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ username, password }),
+                credentials: "include", // 👈 مهم جداً عشان الموبايل يحفظ Session السيرفر
             });
 
             if (response.ok) {
@@ -44,12 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 localStorage.setItem("coster_user", JSON.stringify(data.user));
                 return true;
             } else {
-                // طباعة سبب الرفض من السيرفر (مثال: كلمة مرور خطأ)
                 console.error("Login rejected by server with status:", response.status);
                 return false;
             }
         } catch (error) {
-            // طباعة الخطأ لو كان فشل في الاتصال بالإنترنت أو CORS
             console.error("Network or CORS error during login:", error);
             return false;
         }
@@ -61,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(userData),
+                credentials: "include", // 👈 مهم جداً هنا أيضاً
             });
 
             if (response.ok) {
@@ -78,7 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const logout = () => {
+    const logout = async () => {
+        try {
+            // اختياري: إبلاغ السيرفر بتسجيل الخروج لإلغاء الـ Session
+            await fetch(`${API_BASE_URL}/api/auth/logout`, {
+                method: "POST",
+                credentials: "include"
+            });
+        } catch (e) {
+            console.error("Logout error", e);
+        }
         setUser(null);
         localStorage.removeItem("coster_user");
     };
