@@ -479,7 +479,7 @@ export function MapView({
                     </Marker>
                 ))}
                 {showUserLocation && userLocation && (
-                    <RecenterButton userLocation={userLocation} />
+                    <RecenterButton userLocation={userLocation} mapRef={mapRef} />
                 )}
             </MapContainer>
 
@@ -534,8 +534,8 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // تحديث الرابط الحقيقي تبعك 100%
-    const SERVER_URL = import.meta.env.VITE_API_URL || "https://bus-p4kg.onrender.com";
+    // تحديث الرابط الحقيقي تبعك على Railway
+    const SERVER_URL = import.meta.env.VITE_API_URL || "https://bus-production-8fb6.up.railway.app";
 
     const searchNominatim = useCallback(async (q: string) => {
         if (q.trim().length < 2) {
@@ -548,9 +548,7 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
 
         try {
             const lang = isRTL ? "ar" : "en";
-
             const url = `${SERVER_URL}/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`;
-
             const res = await fetch(url);
 
             if (res.ok) {
@@ -560,7 +558,6 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
                 setResults([]);
             }
         } catch (error) {
-            console.error("Search API Error:", error);
             setResults([]);
         } finally {
             setLoading(false);
@@ -676,12 +673,11 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
     );
 }
 
-function RecenterButton({ userLocation }: { userLocation: { lat: number; lng: number } }) {
-    const map = useMap();
+function RecenterButton({ userLocation, mapRef }: { userLocation: { lat: number; lng: number }; mapRef: React.RefObject<LeafletMap | null> }) {
     const { t } = useLanguage();
     return (
         <button
-            onClick={() => map.setView([userLocation.lat, userLocation.lng], 17, { animate: true })}
+            onClick={() => mapRef.current?.setView([userLocation.lat, userLocation.lng], 17, { animate: true })}
             className="absolute bottom-5 end-3 z-[1000] bg-white dark:bg-zinc-800 rounded-full shadow-xl border-2 border-blue-400 flex items-center gap-2 px-3 py-2 hover:bg-blue-50 dark:hover:bg-zinc-700 active:scale-95 transition-all"
             data-testid="button-recenter-map"
             title={t('myLocation')}
