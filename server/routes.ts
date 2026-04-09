@@ -1,11 +1,50 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth } from "./auth";
 import { insertUserSchema, insertBusSchema, insertReservationSchema, insertIssueReportSchema } from "@shared/schema";
 import { z } from "zod";
 
+// ============ وظيفة الحسابات التجريبية (Seeding) ============
+async function seedTestAccounts() {
+    try {
+        console.log("Checking for test accounts in database...");
+
+        // 1. حساب المواطن التجريبي
+        const citizen = await storage.getUserByUsername("user1");
+        if (!citizen) {
+            console.log("Seeding: Creating test citizen (user1)...");
+            await storage.createUser({
+                username: "user1",
+                password: "123456",
+                fullName: "Citizen Test User",
+                phone: "0000000000", // تم التعديل من phoneNumber إلى phone بناءً على أخطاء TS
+                nationalId: "000",
+                role: "citizen"
+            });
+        }
+
+        // 2. حساب السائق التجريبي
+        const driver = await storage.getUserByUsername("driver1");
+        if (!driver) {
+            console.log("Seeding: Creating test driver (driver1)...");
+            await storage.createUser({
+                username: "driver1",
+                password: "123456",
+                fullName: "Driver Test User",
+                phone: "1111111111", // تم التعديل من phoneNumber إلى phone
+                nationalId: "111",
+                role: "driver"
+            });
+        }
+
+        console.log("Database seeding completed successfully.");
+    } catch (error) {
+        console.error("Error during database seeding:", error);
+    }
+}
+
 // ============ TRAFFIC ALERTS (Live In-Memory System) ============
-// استخدمنا ذاكرة السيرفر المؤقتة لأن بلاغات المرور تتغير باستمرار ولا داعي لتخزينها للأبد
 interface TrafficAlert {
     id: string;
     type: string; // 'road_closed', 'traffic_jam', 'accident'
@@ -20,6 +59,12 @@ export async function registerRoutes(
     httpServer: Server,
     app: Express
 ): Promise<Server> {
+
+    // تشغيل وظيفة الحسابات التجريبية عند بدء تشغيل المسارات
+    seedTestAccounts();
+
+    // إعداد نظام التحقق (Passport Auth)
+    setupAuth(app);
 
     // ============ AUTH ROUTES ============
 
@@ -38,7 +83,6 @@ export async function registerRoutes(
                 return res.status(401).json({ message: "اسم المستخدم أو كلمة المرور غير صحيحة" });
             }
 
-            // Don't send password back
             const { password: _, ...userWithoutPassword } = user;
             res.json({ user: userWithoutPassword });
         } catch (error) {
@@ -71,8 +115,7 @@ export async function registerRoutes(
 
     // ============ BUS ROUTES ============
 
-    // Get all visible buses
-    app.get("/api/buses", async (req, res) => {
+    app.get("/api/buses", async (_req, res) => {
         try {
             const buses = await storage.getVisibleBuses();
             res.json(buses);
@@ -81,7 +124,6 @@ export async function registerRoutes(
         }
     });
 
-    // Get bus by driver ID
     app.get("/api/buses/driver/:driverId", async (req, res) => {
         try {
             const bus = await storage.getBusByDriver(req.params.driverId);
@@ -91,7 +133,6 @@ export async function registerRoutes(
         }
     });
 
-    // Get single bus
     app.get("/api/buses/:id", async (req, res) => {
         try {
             const bus = await storage.getBus(req.params.id);
@@ -104,7 +145,6 @@ export async function registerRoutes(
         }
     });
 
-    // Create bus
     app.post("/api/buses", async (req, res) => {
         try {
             const parseResult = insertBusSchema.safeParse(req.body);
@@ -120,7 +160,6 @@ export async function registerRoutes(
         }
     });
 
-    // Update bus
     app.patch("/api/buses/:id", async (req, res) => {
         try {
             const currentBus = await storage.getBus(req.params.id);
@@ -137,7 +176,6 @@ export async function registerRoutes(
                 }
             }
 
-            // Validate currentPassengers
             if (updates.currentPassengers !== undefined) {
                 const passengers = Number(updates.currentPassengers);
                 if (isNaN(passengers) || passengers < 0 || passengers > currentBus.totalCapacity) {
@@ -145,14 +183,12 @@ export async function registerRoutes(
                 }
                 updates.currentPassengers = passengers;
 
-                // Auto-hide bus if full
                 if (passengers >= currentBus.totalCapacity) {
                     updates.isVisible = false;
                 }
             }
 
             const bus = await storage.updateBus(req.params.id, updates);
-
             res.json(bus);
         } catch (error) {
             res.status(500).json({ message: "حدث خطأ في الخادم" });
@@ -161,8 +197,7 @@ export async function registerRoutes(
 
     // ============ ROUTE WAYPOINTS ============
 
-    // Get all bus routes (busId → waypoints[])
-    app.get("/api/routes", async (req, res) => {
+    app.get("/api/routes", async (_req, res) => {
         try {
             const allRoutes = await storage.getAllRouteWaypoints();
             res.json(allRoutes);
@@ -171,7 +206,6 @@ export async function registerRoutes(
         }
     });
 
-    // Get route waypoints
     app.get("/api/routes/:busId", async (req, res) => {
         try {
             const waypoints = await storage.getRouteWaypoints(req.params.busId);
@@ -181,7 +215,6 @@ export async function registerRoutes(
         }
     });
 
-    // Set route waypoints (replaces existing)
     app.post("/api/routes/:busId", async (req, res) => {
         try {
             const { waypoints } = req.body;
@@ -190,10 +223,8 @@ export async function registerRoutes(
                 return res.status(400).json({ message: "بيانات غير صالحة" });
             }
 
-            // Delete existing waypoints
             await storage.deleteRouteWaypoints(req.params.busId);
 
-            // Create new waypoints
             const createdWaypoints = [];
             for (let i = 0; i < waypoints.length; i++) {
                 const wp = await storage.createRouteWaypoint({
@@ -214,7 +245,6 @@ export async function registerRoutes(
 
     // ============ RESERVATION ROUTES ============
 
-    // Get user's reservations
     app.get("/api/reservations/user/:userId", async (req, res) => {
         try {
             const reservations = await storage.getReservationsByUser(req.params.userId);
@@ -224,7 +254,6 @@ export async function registerRoutes(
         }
     });
 
-    // Get user's active reservation
     app.get("/api/reservations/user/:userId/active", async (req, res) => {
         try {
             const reservation = await storage.getActiveReservationByUser(req.params.userId);
@@ -234,7 +263,6 @@ export async function registerRoutes(
         }
     });
 
-    // Get bus reservations (with passenger info)
     app.get("/api/reservations/bus/:busId", async (req, res) => {
         try {
             const reservations = await storage.getReservationsByBus(req.params.busId);
@@ -254,7 +282,6 @@ export async function registerRoutes(
         }
     });
 
-    // Create reservation
     app.post("/api/reservations", async (req, res) => {
         try {
             const { busId, pickupLat, pickupLng, passengerId } = req.body;
@@ -263,7 +290,6 @@ export async function registerRoutes(
                 return res.status(400).json({ message: "بيانات غير صالحة" });
             }
 
-            // Check if bus exists and has capacity
             const bus = await storage.getBus(busId);
             if (!bus) {
                 return res.status(404).json({ message: "الباص غير موجود" });
@@ -273,27 +299,12 @@ export async function registerRoutes(
                 return res.status(400).json({ message: "الباص ممتلئ" });
             }
 
-            // Check if user already has an active reservation
             if (passengerId && passengerId !== "anonymous") {
                 const existingReservation = await storage.getActiveReservationByUser(passengerId);
                 if (existingReservation) {
                     return res.status(400).json({
                         message: "لديك حجز نشط بالفعل. يرجى إلغاء حجزك الحالي قبل حجز باص جديد",
                         code: "ACTIVE_RESERVATION_EXISTS"
-                    });
-                }
-            }
-
-            if (bus.currentLat && bus.currentLng) {
-                const busLat = bus.currentLat;
-                const busLng = bus.currentLng;
-                const latDiff = pickupLat - busLat;
-                const lngDiff = pickupLng - busLng;
-                const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
-
-                if (distance > 0.5) {
-                    return res.status(400).json({
-                        message: "موقعك بعيد جداً عن مسار الباص. يرجى اختيار باص أقرب إليك"
                     });
                 }
             }
@@ -310,11 +321,9 @@ export async function registerRoutes(
             });
 
             const newPassengerCount = bus.currentPassengers + 1;
-            const isFull = newPassengerCount >= bus.totalCapacity;
-
             await storage.updateBus(busId, {
                 currentPassengers: newPassengerCount,
-                isVisible: isFull ? false : bus.isVisible
+                isVisible: newPassengerCount >= bus.totalCapacity ? false : bus.isVisible
             });
 
             res.status(201).json(reservation);
@@ -323,11 +332,9 @@ export async function registerRoutes(
         }
     });
 
-    // Update reservation
     app.patch("/api/reservations/:id", async (req, res) => {
         try {
             const { status } = req.body;
-
             if (!status || !["pending", "confirmed", "completed", "cancelled"].includes(status)) {
                 return res.status(400).json({ message: "حالة غير صالحة" });
             }
@@ -341,90 +348,21 @@ export async function registerRoutes(
                 const bus = await storage.getBus(currentReservation.busId);
                 if (bus) {
                     const newPassengerCount = Math.max(0, bus.currentPassengers - 1);
-                    const wasFull = bus.currentPassengers >= bus.totalCapacity;
                     await storage.updateBus(bus.id, {
                         currentPassengers: newPassengerCount,
-                        ...(wasFull ? { isVisible: true } : {})
+                        isVisible: true
                     });
                 }
             }
 
             const reservation = await storage.updateReservation(req.params.id, { status });
-
             res.json(reservation);
         } catch (error) {
             res.status(500).json({ message: "حدث خطأ في الخادم" });
         }
     });
 
-    // ============ ISSUE REPORTS ============
-
-    app.post("/api/reports", async (req, res) => {
-        try {
-            const { category, description, userId } = req.body;
-
-            if (!category || !description) {
-                return res.status(400).json({ message: "النوع والوصف مطلوبان" });
-            }
-
-            const report = await storage.createIssueReport({
-                userId: userId || "anonymous",
-                category,
-                description,
-                status: "pending"
-            });
-
-            const ticketNumber = `TKT-${Date.now().toString(36).toUpperCase()}`;
-
-            res.status(201).json({ ...report, ticketNumber });
-        } catch (error) {
-            res.status(500).json({ message: "حدث خطأ في الخادم" });
-        }
-    });
-
-    app.get("/api/reports", async (req, res) => {
-        try {
-            const reports = await storage.getIssueReports();
-            res.json(reports);
-        } catch (error) {
-            res.status(500).json({ message: "حدث خطأ في الخادم" });
-        }
-    });
-
-    app.post("/api/citizen/location", async (req, res) => {
-        try {
-            const { userId, lat, lng } = req.body;
-            if (!userId || lat == null || lng == null) {
-                return res.status(400).json({ message: "بيانات غير صالحة" });
-            }
-            const user = await storage.getUser(userId);
-            if (!user || user.role !== "citizen") {
-                return res.status(403).json({ message: "غير مصرح" });
-            }
-            const activeRes = await storage.getActiveReservationByUser(userId);
-            if (!activeRes) {
-                return res.status(400).json({ message: "لا يوجد حجز نشط" });
-            }
-            storage.setCitizenLocation(userId, { lat, lng, timestamp: Date.now() });
-            res.json({ ok: true });
-        } catch {
-            res.status(500).json({ message: "حدث خطأ في الخادم" });
-        }
-    });
-
-    app.get("/api/citizen/locations/:busId", async (req, res) => {
-        try {
-            const busId = req.params.busId;
-            const bus = await storage.getBus(busId);
-            if (!bus) {
-                return res.status(404).json({ message: "الباص غير موجود" });
-            }
-            const locations = await storage.getCitizenLocationsForBus(busId);
-            res.json(locations);
-        } catch {
-            res.status(500).json({ message: "حدث خطأ في الخادم" });
-        }
-    });
+    // ============ SEARCH & OTHER API ============
 
     app.get("/api/search/location", async (req, res) => {
         try {
@@ -442,9 +380,8 @@ export async function registerRoutes(
         }
     });
 
-    // ============ TRAFFIC ALERTS API (NEW) ============
+    // ============ TRAFFIC ALERTS API ============
 
-    // إضافة بلاغ أزمة أو طريق مغلق
     app.post("/api/traffic-alerts", (req, res) => {
         try {
             const { type, lat, lng, reportedBy } = req.body;
@@ -454,9 +391,7 @@ export async function registerRoutes(
 
             const newAlert: TrafficAlert = {
                 id: `alt_${Date.now()}`,
-                type,
-                lat,
-                lng,
+                type, lat, lng,
                 reportedBy: reportedBy || "driver",
                 timestamp: Date.now()
             };
@@ -468,12 +403,9 @@ export async function registerRoutes(
         }
     });
 
-    // جلب البلاغات النشطة
-    app.get("/api/traffic-alerts", (req, res) => {
-        // تنظيف البلاغات القديمة (أقدم من ساعتين)
+    app.get("/api/traffic-alerts", (_req, res) => {
         const twoHoursAgo = Date.now() - (2 * 60 * 60 * 1000);
         trafficAlerts = trafficAlerts.filter(alert => alert.timestamp > twoHoursAgo);
-
         res.json(trafficAlerts);
     });
 
