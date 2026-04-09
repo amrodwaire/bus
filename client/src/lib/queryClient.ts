@@ -1,7 +1,7 @@
 ﻿import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// الرابط الأساسي للسيرفر على الإنترنت
-const API_BASE_URL = "https://bus-p4kg.onrender.com";
+// الرابط الأساسي الجديد للسيرفر على Railway
+const API_BASE_URL = "https://bus-production-8fb6.up.railway.app";
 
 async function throwIfResNotOk(res: Response) {
     if (!res.ok) {
@@ -15,7 +15,7 @@ export async function apiRequest(
     url: string,
     data?: unknown | undefined,
 ): Promise<Response> {
-    // توجيه الطلب للسيرفر الحقيقي
+    // توجيه الطلب للسيرفر الحقيقي الجديد
     const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
 
     const res = await fetch(fullUrl, {
@@ -35,9 +35,9 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
     ({ on401: unauthorizedBehavior }) =>
         async ({ queryKey }) => {
-            // توجيه جلب البيانات للسيرفر الحقيقي
+            // توجيه جلب البيانات للسيرفر الحقيقي الجديد
             const urlPath = queryKey.join("/") as string;
-            const fullUrl = urlPath.startsWith("http") ? urlPath : `${API_BASE_URL}${urlPath}`;
+            const fullUrl = urlPath.startsWith("http") ? urlPath : `${API_BASE_URL}/${urlPath}`;
 
             const res = await fetch(fullUrl, {
                 credentials: "include",
