@@ -6,9 +6,13 @@ import cors from "cors";
 
 const app = express();
 
-// التعديل السحري: تفعيل الـ CORS مع السماح باستقبال بيانات تسجيل الدخول (الكوكيز)
+// تعديل الـ CORS ليكون متوافق مع الموبايل و Railway Health Check
 app.use(cors({
-    origin: true,
+    origin: (origin, callback) => {
+        // السماح بالطلبات اللي بدون أصل (زي الموبايل) أو أي أصل آخر لضمان عمل البحث
+        if (!origin) return callback(null, true);
+        callback(null, true);
+    },
     credentials: true
 }));
 
@@ -37,10 +41,10 @@ export function log(message: string, source = "express") {
         second: "2-digit",
         hour12: true,
     });
-
     console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+// لوغ لكل الطلبات لمراقبة ما يحدث
 app.use((req, res, next) => {
     const start = Date.now();
     const path = req.path;
@@ -59,30 +63,28 @@ app.use((req, res, next) => {
             if (capturedJsonResponse) {
                 logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
             }
-
             log(logLine);
         }
     });
-
     next();
 });
 
 (async () => {
+    // 1. تسجيل الطرق
     await registerRoutes(httpServer, app);
 
+    // 2. معالجة الأخطاء
     app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
         const status = err.status || err.statusCode || 500;
         const message = err.message || "Internal Server Error";
-
         console.error("Internal Server Error:", err);
-
         if (res.headersSent) {
             return next(err);
         }
-
         return res.status(status).json({ message });
     });
 
+    // 3. الملفات الثابتة
     if (process.env.NODE_ENV === "production") {
         serveStatic(app);
     } else {
@@ -90,15 +92,9 @@ app.use((req, res, next) => {
         await setupVite(httpServer, app);
     }
 
-    const port = parseInt(process.env.PORT || "5000", 10);
-    httpServer.listen(
-        {
-            port,
-            host: "0.0.0.0",
-            reusePort: true,
-        },
-        () => {
-            log(`serving on port ${port}`);
-        },
-    );
+    // 4. تشغيل السيرفر (التعديل الأهم لـ Railway)
+    const port = Number(process.env.PORT) || 5000;
+    httpServer.listen(port, "0.0.0.0", () => {
+        log(`serving on port ${port}`);
+    });
 })();
