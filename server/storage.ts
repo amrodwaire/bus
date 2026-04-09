@@ -26,6 +26,7 @@ export interface IStorage {
     createBus(bus: InsertBus): Promise<Bus>;
     updateBus(id: string, updates: Partial<Bus>): Promise<Bus | undefined>;
     getRouteWaypoints(busId: string): Promise<RouteWaypoint[]>;
+    getAllRouteWaypoints(): Promise<Record<string, RouteWaypoint[]>>;
     deleteRouteWaypoints(busId: string): Promise<void>;
     createRouteWaypoint(wp: InsertRouteWaypoint): Promise<RouteWaypoint>;
     createReservation(reservation: InsertReservation): Promise<Reservation>;
@@ -46,28 +47,34 @@ export class MemStorage implements IStorage {
         this.buses = new Map();
         this.routeWaypoints = new Map();
         this.reservations = new Map();
+        // إعداد مخزن الجلسات للذاكرة (ضروري لتجنب تسريب الذاكرة في ريندر)
         this.sessionStore = new MemoryStore({ checkPeriod: 86400000 });
         this.seedData();
     }
 
     private seedData() {
-        // حسابات تجريبية ثابتة لضمان الدخول
-        const driverId = "driver-123";
-        this.users.set(driverId, {
-            id: driverId,
+        const dId = "driver-123";
+        this.users.set(dId, {
+            id: dId,
             username: "driver1",
             password: "123456",
             fullName: "أحمد السائق",
-            role: "driver"
+            role: "driver",
+            phone: "0790000000",
+            nationalId: "111",
+            licenseNumber: "DL-123"
         } as any);
 
-        const citizenId = "user-123";
-        this.users.set(citizenId, {
-            id: citizenId,
+        const uId = "user-123";
+        this.users.set(uId, {
+            id: uId,
             username: "user1",
             password: "123456",
             fullName: "سارة المواطنة",
-            role: "citizen"
+            role: "citizen",
+            phone: "0780000000",
+            nationalId: "222",
+            licenseNumber: null
         } as any);
     }
 
@@ -108,6 +115,18 @@ export class MemStorage implements IStorage {
             .filter(wp => wp.busId === busId)
             .sort((a, b) => a.orderIndex - b.orderIndex);
     }
+
+    // إصلاح الخطأ الموضح في الصورة image_aac184
+    async getAllRouteWaypoints() {
+        const res: Record<string, RouteWaypoint[]> = {};
+        const waypoints = Array.from(this.routeWaypoints.values());
+        for (const wp of waypoints) {
+            if (!res[wp.busId]) res[wp.busId] = [];
+            res[wp.busId].push(wp);
+        }
+        return res;
+    }
+
     async createRouteWaypoint(wp: InsertRouteWaypoint) {
         const id = randomUUID();
         const newWp = { ...wp, id } as any;
@@ -117,26 +136,29 @@ export class MemStorage implements IStorage {
 
     // إصلاح الخطأ الموضح في الصورة image_aab9c2
     async deleteRouteWaypoints(busId: string) {
-        const toDelete: string[] = [];
-        this.routeWaypoints.forEach((wp, id) => {
-            if (wp.busId === busId) toDelete.push(id);
-        });
-        toDelete.forEach(id => this.routeWaypoints.delete(id));
+        const entries = Array.from(this.routeWaypoints.entries());
+        for (const [id, wp] of entries) {
+            if (wp.busId === busId) {
+                this.routeWaypoints.delete(id);
+            }
+        }
     }
 
     async getActiveReservationByUser(userId: string) {
         return Array.from(this.reservations.values())
             .find(r => r.passengerId === userId && r.status === "confirmed");
     }
+
     async createReservation(res: InsertReservation) {
         const id = randomUUID();
         const newRes = { ...res, id, createdAt: new Date() } as any;
         this.reservations.set(id, newRes);
         return newRes;
     }
+
     async getNextPriority(busId: string) {
-        const count = Array.from(this.reservations.values()).filter(r => r.busId === busId).length;
-        return count + 1;
+        const list = Array.from(this.reservations.values()).filter(r => r.busId === busId);
+        return list.length + 1;
     }
 }
 
