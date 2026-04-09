@@ -1,9 +1,8 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
-import session from "express-session";
+import type { Express } from "express";
 import { storage } from "./storage";
-import { User as SelectUser } from "@shared/schema";
+import type { User as SelectUser } from "@shared/schema";
 
 declare global {
     namespace Express {
@@ -12,23 +11,6 @@ declare global {
 }
 
 export function setupAuth(app: Express) {
-    const sessionSettings: session.SessionOptions = {
-        secret: process.env.SESSION_SECRET || "bus_app_secret_2026",
-        resave: false,
-        saveUninitialized: false,
-        store: storage.sessionStore,
-        cookie: {
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        },
-    };
-
-    if (app.get("env") === "production") {
-        app.set("trust proxy", 1);
-    }
-
-    app.use(session(sessionSettings));
     app.use(passport.initialize());
     app.use(passport.session());
 
@@ -47,7 +29,7 @@ export function setupAuth(app: Express) {
     );
 
     passport.serializeUser((user, done) => done(null, user.id));
-    passport.deserializeUser(async (id: number, done) => {
+    passport.deserializeUser(async (id: string, done) => {
         try {
             const user = await storage.getUser(id);
             done(null, user);
