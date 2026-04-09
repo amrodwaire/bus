@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap, useMapEvents } from "react-leaflet";
-import { divIcon, latLngBounds, DomEvent, Map as LeafletMap } from "leaflet";
+import { divIcon, latLngBounds, DomEvent } from "leaflet";
 import { Bus, Search, X, MapPin } from "lucide-react";
 import type { Bus as BusType, RouteWaypoint } from "@shared/schema";
 import { useLanguage } from "@/lib/language-context";
@@ -286,7 +286,6 @@ export function MapView({
                 : null;
 
     const hasBothRoutePoints = routeFrom && routeTo;
-    const mapRef = useRef<LeafletMap | null>(null);
 
     return (
         <div
@@ -298,7 +297,6 @@ export function MapView({
                 zoom={14}
                 style={{ height: '100%', width: '100%' }}
                 zoomControl={false}
-                ref={mapRef}
             >
                 <TileLayer
                     attribution='&copy; <a href="https://carto.com/">carto.com</a> contributors'
@@ -479,18 +477,17 @@ export function MapView({
                     </Marker>
                 ))}
                 {showUserLocation && userLocation && (
-                    <RecenterButton userLocation={userLocation} mapRef={mapRef} />
+                    <RecenterButton userLocation={userLocation} />
                 )}
+                <MapSearchBar isRTL={isRTL} />
             </MapContainer>
-
-            <MapSearchOverlay isRTL={isRTL} mapRef={mapRef} />
 
             {routeMapLabel && (
                 <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-[1000] text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg backdrop-blur-sm ${routeMode === "from"
-                        ? "bg-green-600/90"
-                        : routeMode === "to"
-                            ? "bg-red-500/90"
-                            : "bg-indigo-600/90"
+                    ? "bg-green-600/90"
+                    : routeMode === "to"
+                        ? "bg-red-500/90"
+                        : "bg-indigo-600/90"
                     }`}>
                     {routeMapLabel}
                 </div>
@@ -524,7 +521,8 @@ interface SearchResult {
     lon: string;
 }
 
-function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.RefObject<LeafletMap | null> }) {
+function MapSearchBar({ isRTL }: { isRTL: boolean }) {
+    const map = useMap();
     const { t } = useLanguage();
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<SearchResult[]>([]);
@@ -532,23 +530,16 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
     const [loading, setLoading] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
     const containerRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
 
-    // تحديث الرابط الحقيقي تبعك على Railway
-    const SERVER_URL = import.meta.env.VITE_API_URL || "https://bus-production-8fb6.up.railway.app";
-
+    // ============ التعديل السليم: إزالة الـ User-Agent الممنوع ============
     const searchNominatim = useCallback(async (q: string) => {
-        if (q.trim().length < 2) {
-            setResults([]);
-            setIsOpen(false);
-            return;
-        }
+        if (q.length < 2) { setResults([]); return; }
         setLoading(true);
-        setIsOpen(true);
-
         try {
             const lang = isRTL ? "ar" : "en";
-            const url = `${SERVER_URL}/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`;
+            // استخدمنا الرابط المباشر، المتصفح لحاله رح يبعث معلوماته بدون ما نتدخل وتعمل Crash
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${lang}`;
+
             const res = await fetch(url);
 
             if (res.ok) {
@@ -558,35 +549,26 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
                 setResults([]);
             }
         } catch (error) {
+            console.error("Search Error:", error);
             setResults([]);
         } finally {
             setLoading(false);
         }
     }, [isRTL]);
+    // ==================================================================
 
     const handleInput = (val: string) => {
         setQuery(val);
-        if (val.trim().length < 2) {
-            setResults([]);
-            setIsOpen(false);
-            return;
-        }
         setIsOpen(true);
         if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => searchNominatim(val), 500);
+        debounceRef.current = setTimeout(() => searchNominatim(val), 400);
     };
 
     const selectResult = (r: SearchResult) => {
-        const lat = parseFloat(r.lat);
-        const lng = parseFloat(r.lon);
+        map.setView([parseFloat(r.lat), parseFloat(r.lon)], 16, { animate: true });
         setQuery(r.display_name.split(",")[0]);
         setIsOpen(false);
         setResults([]);
-        inputRef.current?.blur();
-
-        if (mapRef.current) {
-            mapRef.current.setView([lat, lng], 16, { animate: true });
-        }
     };
 
     const clear = () => {
@@ -596,76 +578,59 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
     };
 
     useEffect(() => {
-        const handler = (e: MouseEvent | TouchEvent) => {
+        if (containerRef.current) {
+            DomEvent.disableClickPropagation(containerRef.current);
+            DomEvent.disableScrollPropagation(containerRef.current);
+        }
+    }, []);
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
                 setIsOpen(false);
             }
         };
         document.addEventListener("mousedown", handler);
-        document.addEventListener("touchstart", handler);
-        return () => {
-            document.removeEventListener("mousedown", handler);
-            document.removeEventListener("touchstart", handler);
-        };
-    }, []);
-
-    const stopPropagation = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-        e.stopPropagation();
+        return () => document.removeEventListener("mousedown", handler);
     }, []);
 
     return (
-        <div
-            ref={containerRef}
-            className="absolute top-3 left-3 right-3 z-[1002]"
-            style={{ direction: isRTL ? "rtl" : "ltr" }}
-            onMouseDown={stopPropagation}
-            onTouchStart={stopPropagation}
-            onClick={stopPropagation}
-        >
+        <div ref={containerRef} className="absolute top-3 left-3 right-3 z-[1001]" style={{ direction: isRTL ? "rtl" : "ltr" }}>
             <div className="relative">
-                <div className="flex items-center bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden relative z-10">
+                <div className="flex items-center bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden">
                     <Search className="h-4 w-4 text-muted-foreground mx-3 flex-shrink-0" />
                     <input
-                        ref={inputRef}
                         type="text"
                         value={query}
                         onChange={(e) => handleInput(e.target.value)}
-                        onFocus={() => { if (query.trim().length >= 2) setIsOpen(true); }}
+                        onFocus={() => results.length > 0 && setIsOpen(true)}
                         placeholder={t('searchLocation')}
-                        className="flex-1 py-2.5 bg-transparent text-sm outline-none placeholder:text-muted-foreground w-full"
+                        className="flex-1 py-2.5 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                         data-testid="input-map-search"
                     />
                     {query && (
-                        <button onClick={clear} className="px-3 py-2 text-muted-foreground hover:text-foreground h-full flex items-center justify-center" data-testid="button-clear-search">
+                        <button onClick={clear} className="px-3 text-muted-foreground hover:text-foreground" data-testid="button-clear-search">
                             <X className="h-4 w-4" />
                         </button>
                     )}
                 </div>
 
-                {isOpen && query.length >= 2 && (
-                    <div className="absolute w-full top-full left-0 mt-1 bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden max-h-60 overflow-y-auto z-20">
-                        {loading ? (
-                            <div className="px-4 py-4 text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
-                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                {t('searching')}...
-                            </div>
-                        ) : results.length === 0 ? (
-                            <div className="px-4 py-4 text-sm text-muted-foreground text-center">
-                                لا توجد نتائج لـ "{query}"
-                            </div>
-                        ) : (
-                            results.map((r) => (
-                                <button
-                                    key={r.place_id}
-                                    onClick={() => selectResult(r)}
-                                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/50 text-start transition-colors border-b border-border last:border-0"
-                                    data-testid={`search-result-${r.place_id}`}
-                                >
-                                    <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm line-clamp-2">{r.display_name}</span>
-                                </button>
-                            ))
+                {isOpen && (results.length > 0 || loading) && (
+                    <div className="mt-1 bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden max-h-60 overflow-y-auto">
+                        {loading && results.length === 0 && (
+                            <div className="px-4 py-3 text-sm text-muted-foreground text-center">{t('searching')}</div>
                         )}
+                        {results.map((r) => (
+                            <button
+                                key={r.place_id}
+                                onClick={() => selectResult(r)}
+                                className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/50 text-start transition-colors border-b border-border last:border-0"
+                                data-testid={`search-result-${r.place_id}`}
+                            >
+                                <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                                <span className="text-sm line-clamp-2">{r.display_name}</span>
+                            </button>
+                        ))}
                     </div>
                 )}
             </div>
@@ -673,11 +638,12 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
     );
 }
 
-function RecenterButton({ userLocation, mapRef }: { userLocation: { lat: number; lng: number }; mapRef: React.RefObject<LeafletMap | null> }) {
+function RecenterButton({ userLocation }: { userLocation: { lat: number; lng: number } }) {
+    const map = useMap();
     const { t } = useLanguage();
     return (
         <button
-            onClick={() => mapRef.current?.setView([userLocation.lat, userLocation.lng], 17, { animate: true })}
+            onClick={() => map.setView([userLocation.lat, userLocation.lng], 17, { animate: true })}
             className="absolute bottom-5 end-3 z-[1000] bg-white dark:bg-zinc-800 rounded-full shadow-xl border-2 border-blue-400 flex items-center gap-2 px-3 py-2 hover:bg-blue-50 dark:hover:bg-zinc-700 active:scale-95 transition-all"
             data-testid="button-recenter-map"
             title={t('myLocation')}

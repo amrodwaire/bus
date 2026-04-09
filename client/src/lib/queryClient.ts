@@ -1,7 +1,7 @@
 ﻿import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 // 👈 الرابط الثابت لسيرفرك على Render (استبدله برابطك الحقيقي إذا كان مختلفاً)
-const API_BASE_URL = "https://bus-p4kg.onrender.com";
+const API_BASE_URL = "https://bus-app.onrender.com";
 
 async function throwIfResNotOk(res: Response) {
     if (!res.ok) {
