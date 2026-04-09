@@ -531,14 +531,20 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // ============ التعديل السليم: إزالة الـ User-Agent الممنوع ============
+    // ============ التعديل الجديد: تجاوز الحظر وإصلاح القائمة ============
     const searchNominatim = useCallback(async (q: string) => {
-        if (q.length < 2) { setResults([]); return; }
+        if (q.trim().length < 2) {
+            setResults([]);
+            setIsOpen(false);
+            return;
+        }
         setLoading(true);
+        setIsOpen(true); // إجبار القائمة تظل فاتحة عشان تظهر حالة "جاري البحث"
+
         try {
             const lang = isRTL ? "ar" : "en";
-            // استخدمنا الرابط المباشر، المتصفح لحاله رح يبعث معلوماته بدون ما نتدخل وتعمل Crash
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${lang}`;
+            // استخدمنا إيميل وهمي جوا الرابط عشان السيرفر يقبل الطلب بدون ما يمنعنا
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${lang}&email=coster.jordan.app@gmail.com`;
 
             const res = await fetch(url);
 
@@ -555,13 +561,19 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
             setLoading(false);
         }
     }, [isRTL]);
-    // ==================================================================
+    // ====================================================================
 
     const handleInput = (val: string) => {
         setQuery(val);
-        setIsOpen(true);
+        if (val.trim().length > 0) {
+            setIsOpen(true);
+        } else {
+            setIsOpen(false);
+            setResults([]);
+        }
         if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => searchNominatim(val), 400);
+        //หน่วง الوقت لـ 500ms عشان ما نضغط السيرفر بكل حرف
+        debounceRef.current = setTimeout(() => searchNominatim(val), 500);
     };
 
     const selectResult = (r: SearchResult) => {
@@ -597,40 +609,49 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
     return (
         <div ref={containerRef} className="absolute top-3 left-3 right-3 z-[1001]" style={{ direction: isRTL ? "rtl" : "ltr" }}>
             <div className="relative">
-                <div className="flex items-center bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden">
+                <div className="flex items-center bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden relative z-10">
                     <Search className="h-4 w-4 text-muted-foreground mx-3 flex-shrink-0" />
                     <input
                         type="text"
                         value={query}
                         onChange={(e) => handleInput(e.target.value)}
-                        onFocus={() => results.length > 0 && setIsOpen(true)}
+                        onFocus={() => { if (query.trim().length > 0) setIsOpen(true); }}
                         placeholder={t('searchLocation')}
-                        className="flex-1 py-2.5 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        className="flex-1 py-2.5 bg-transparent text-sm outline-none placeholder:text-muted-foreground w-full"
                         data-testid="input-map-search"
                     />
                     {query && (
-                        <button onClick={clear} className="px-3 text-muted-foreground hover:text-foreground" data-testid="button-clear-search">
+                        <button onClick={clear} className="px-3 text-muted-foreground hover:text-foreground h-full flex items-center justify-center" data-testid="button-clear-search">
                             <X className="h-4 w-4" />
                         </button>
                     )}
                 </div>
 
-                {isOpen && (results.length > 0 || loading) && (
-                    <div className="mt-1 bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden max-h-60 overflow-y-auto">
-                        {loading && results.length === 0 && (
-                            <div className="px-4 py-3 text-sm text-muted-foreground text-center">{t('searching')}</div>
+                {/* إصلاح عرض القائمة المنسدلة للنتائج */}
+                {isOpen && query.length >= 2 && (
+                    <div className="absolute w-full top-full left-0 mt-1 bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden max-h-60 overflow-y-auto z-20">
+                        {loading ? (
+                            <div className="px-4 py-4 text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
+                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                                {t('searching')}...
+                            </div>
+                        ) : results.length === 0 ? (
+                            <div className="px-4 py-4 text-sm text-muted-foreground text-center">
+                                لا توجد نتائج لـ "{query}"
+                            </div>
+                        ) : (
+                            results.map((r) => (
+                                <button
+                                    key={r.place_id}
+                                    onClick={() => selectResult(r)}
+                                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/50 text-start transition-colors border-b border-border last:border-0"
+                                    data-testid={`search-result-${r.place_id}`}
+                                >
+                                    <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                                    <span className="text-sm line-clamp-2">{r.display_name}</span>
+                                </button>
+                            ))
                         )}
-                        {results.map((r) => (
-                            <button
-                                key={r.place_id}
-                                onClick={() => selectResult(r)}
-                                className="w-full flex items-start gap-3 px-4 py-3 hover:bg-muted/50 text-start transition-colors border-b border-border last:border-0"
-                                data-testid={`search-result-${r.place_id}`}
-                            >
-                                <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                                <span className="text-sm line-clamp-2">{r.display_name}</span>
-                            </button>
-                        ))}
                     </div>
                 )}
             </div>
