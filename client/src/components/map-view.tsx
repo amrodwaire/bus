@@ -531,19 +531,16 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // ============ التعديل السحري: البحث من الموبايل مباشرة ============
+    // ============ التعديل السليم: إزالة الـ User-Agent الممنوع ============
     const searchNominatim = useCallback(async (q: string) => {
         if (q.length < 2) { setResults([]); return; }
         setLoading(true);
         try {
             const lang = isRTL ? "ar" : "en";
-            // حذفنا المسار النسبي (/api/search) وحطينا الرابط المباشر لسيرفر الخرائط
+            // استخدمنا الرابط المباشر، المتصفح لحاله رح يبعث معلوماته بدون ما نتدخل وتعمل Crash
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${lang}`;
 
-            const res = await fetch(url, {
-                // إجبار المتصفح/الموبايل يعرّف عن نفسه كأنه جهاز حقيقي مش سيرفر
-                headers: { "User-Agent": "Coster-JordanTransport-MobileApp" }
-            });
+            const res = await fetch(url);
 
             if (res.ok) {
                 const data: SearchResult[] = await res.json();
@@ -551,10 +548,12 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
             } else {
                 setResults([]);
             }
-        } catch {
+        } catch (error) {
+            console.error("Search Error:", error);
             setResults([]);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }, [isRTL]);
     // ==================================================================
 
