@@ -311,7 +311,6 @@ export function MapView({
 
                 {onMapClick && <MapClickHandler onMapClick={onMapClick} />}
 
-                {/* User location: pulsating blue ring + solid dot */}
                 {showUserLocation && userLocation && (
                     <>
                         <Circle
@@ -333,7 +332,6 @@ export function MapView({
                     </>
                 )}
 
-                {/* Road-following route polyline */}
                 {routePath && routePath.length > 0 && (
                     <>
                         <Polyline
@@ -354,7 +352,7 @@ export function MapView({
                         />
                     </>
                 )}
-                {/* Fallback straight dashed line when no road path yet */}
+
                 {hasBothRoutePoints && !routePath && (
                     <Polyline
                         positions={[
@@ -370,7 +368,6 @@ export function MapView({
                     />
                 )}
 
-                {/* Walking route polyline */}
                 {walkingPath && walkingPath.length > 0 && (
                     <Polyline
                         positions={walkingPath}
@@ -383,7 +380,6 @@ export function MapView({
                     />
                 )}
 
-                {/* Live citizen location markers (shown on driver map) */}
                 {citizenMarkers.map((cm) => (
                     <Marker
                         key={`citizen-${cm.userId}`}
@@ -399,7 +395,6 @@ export function MapView({
                     </Marker>
                 ))}
 
-                {/* Passenger pickup markers */}
                 {passengerPickups.map((pickup, i) => (
                     <Marker
                         key={`pickup-${i}`}
@@ -417,7 +412,6 @@ export function MapView({
                     </Marker>
                 ))}
 
-                {/* Route from/to markers */}
                 {routeFrom && (
                     <Marker position={[routeFrom.lat, routeFrom.lng]} icon={createRoutePointIcon("from")}>
                         <Popup><div className="text-center font-bold text-green-600">{t('from')}</div></Popup>
@@ -488,19 +482,17 @@ export function MapView({
                 <MapSearchBar isRTL={isRTL} />
             </MapContainer>
 
-            {/* Instruction label overlay */}
             {routeMapLabel && (
                 <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-[1000] text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg backdrop-blur-sm ${routeMode === "from"
-                        ? "bg-green-600/90"
-                        : routeMode === "to"
-                            ? "bg-red-500/90"
-                            : "bg-indigo-600/90"
+                    ? "bg-green-600/90"
+                    : routeMode === "to"
+                        ? "bg-red-500/90"
+                        : "bg-indigo-600/90"
                     }`}>
                     {routeMapLabel}
                 </div>
             )}
 
-            {/* Route distance/duration info badge */}
             {routeDistanceKm != null && routeDurationMin != null && !routeMode && (
                 <div className="absolute bottom-3 start-3 z-[1000] bg-white dark:bg-zinc-800 text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg border border-border flex items-center gap-2" data-testid="badge-route-info">
                     <span className="text-blue-600 dark:text-blue-400">{routeDistanceKm} {t('km')}</span>
@@ -539,17 +531,32 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
     const containerRef = useRef<HTMLDivElement>(null);
 
+    // ============ التعديل السحري: البحث من الموبايل مباشرة ============
     const searchNominatim = useCallback(async (q: string) => {
         if (q.length < 2) { setResults([]); return; }
         setLoading(true);
         try {
             const lang = isRTL ? "ar" : "en";
-            const res = await fetch(`/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`);
-            const data: SearchResult[] = await res.json();
-            setResults(data);
-        } catch { setResults([]); }
+            // حذفنا المسار النسبي (/api/search) وحطينا الرابط المباشر لسيرفر الخرائط
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${lang}`;
+
+            const res = await fetch(url, {
+                // إجبار المتصفح/الموبايل يعرّف عن نفسه كأنه جهاز حقيقي مش سيرفر
+                headers: { "User-Agent": "Coster-JordanTransport-MobileApp" }
+            });
+
+            if (res.ok) {
+                const data: SearchResult[] = await res.json();
+                setResults(data);
+            } else {
+                setResults([]);
+            }
+        } catch {
+            setResults([]);
+        }
         setLoading(false);
     }, [isRTL]);
+    // ==================================================================
 
     const handleInput = (val: string) => {
         setQuery(val);
