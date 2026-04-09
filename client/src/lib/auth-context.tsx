@@ -16,8 +16,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // المتغير الثابت لرابط السيرفر لتسهيل التعديل مستقبلاً
-    const API_BASE_URL = "https://bus-p4kg.onrender.com";
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
     useEffect(() => {
         const savedUser = localStorage.getItem("coster_user");
