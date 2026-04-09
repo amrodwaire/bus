@@ -1,6 +1,7 @@
 ﻿import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+// 👈 الرابط الثابت لسيرفرك على Render (استبدله برابطك الحقيقي إذا كان مختلفاً)
+const API_BASE_URL = "https://bus-p4kg.onrender.com";
 
 async function throwIfResNotOk(res: Response) {
     if (!res.ok) {
@@ -14,14 +15,14 @@ export async function apiRequest(
     url: string,
     data?: unknown | undefined,
 ): Promise<Response> {
-    // توجيه الطلب للسيرفر الحقيقي الجديد
+    // توجيه الطلب للسيرفر الحقيقي
     const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
 
     const res = await fetch(fullUrl, {
         method,
         headers: data ? { "Content-Type": "application/json" } : {},
         body: data ? JSON.stringify(data) : undefined,
-        credentials: "include",
+        credentials: "include", // 👈 مهم جداً لبقاء تسجيل الدخول
     });
 
     await throwIfResNotOk(res);
@@ -34,12 +35,12 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
     ({ on401: unauthorizedBehavior }) =>
         async ({ queryKey }) => {
-            // توجيه جلب البيانات للسيرفر الحقيقي الجديد
+            // توجيه جلب البيانات للسيرفر الحقيقي
             const urlPath = queryKey.join("/") as string;
             const fullUrl = urlPath.startsWith("http") ? urlPath : `${API_BASE_URL}/${urlPath}`;
 
             const res = await fetch(fullUrl, {
-                credentials: "include",
+                credentials: "include", // 👈 مهم جداً لبقاء تسجيل الدخول
             });
 
             if (unauthorizedBehavior === "returnNull" && res.status === 401) {
