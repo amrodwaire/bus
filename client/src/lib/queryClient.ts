@@ -1,7 +1,6 @@
 ﻿import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// الرابط الأساسي الجديد للسيرفر على Railway
-const API_BASE_URL = "https://bus-production-8fb6.up.railway.app";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 async function throwIfResNotOk(res: Response) {
     if (!res.ok) {
