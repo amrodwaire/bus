@@ -1,22 +1,35 @@
 ﻿import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import cors from "cors";
+import { Pool } from "pg";
+import cors from "cors"; // تمت إضافة مكتبة الكورس هنا
 
 const app = express();
 
-// تعديل الـ CORS ليكون متوافق مع الموبايل و Railway Health Check
+// إعداد الكورس (CORS) للسماح لتطبيق الموبايل بالاتصال بالسيرفر
 app.use(cors({
     origin: (origin, callback) => {
-        // السماح بالطلبات اللي بدون أصل (زي الموبايل) أو أي أصل آخر لضمان عمل البحث
-        if (!origin) return callback(null, true);
         callback(null, true);
     },
     credentials: true
 }));
 
 const httpServer = createServer(app);
+
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction) {
+    if (!process.env.SESSION_SECRET) {
+        throw new Error("SESSION_SECRET environment variable is required in production");
+    }
+    if (!process.env.DATABASE_URL) {
+        throw new Error("DATABASE_URL environment variable is required in production");
+    }
+    app.set("trust proxy", 1);
+}
 
 declare module "http" {
     interface IncomingMessage {
@@ -34,6 +47,33 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+if (process.env.DATABASE_URL) {
+    const PgStore = connectPgSimple(session);
+    const sessionPool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+    });
+
+    app.use(
+        session({
+            store: new PgStore({
+                pool: sessionPool,
+                tableName: "session",
+                createTableIfMissing: true,
+            }),
+            secret: process.env.SESSION_SECRET || "coster-dev-only-secret",
+            resave: false,
+            saveUninitialized: false,
+            proxy: isProduction,
+            cookie: {
+                secure: isProduction,
+                httpOnly: true,
+                maxAge: 24 * 60 * 60 * 1000,
+                sameSite: "lax",
+            },
+        }),
+    );
+}
+
 export function log(message: string, source = "express") {
     const formattedTime = new Date().toLocaleTimeString("en-US", {
         hour: "numeric",
@@ -41,10 +81,10 @@ export function log(message: string, source = "express") {
         second: "2-digit",
         hour12: true,
     });
+
     console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-// لوغ لكل الطلبات لمراقبة ما يحدث
 app.use((req, res, next) => {
     const start = Date.now();
     const path = req.path;
@@ -63,28 +103,33 @@ app.use((req, res, next) => {
             if (capturedJsonResponse) {
                 logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
             }
+
             log(logLine);
         }
     });
+
     next();
 });
 
 (async () => {
-    // 1. تسجيل الطرق
     await registerRoutes(httpServer, app);
 
-    // 2. معالجة الأخطاء
     app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
         const status = err.status || err.statusCode || 500;
         const message = err.message || "Internal Server Error";
+
         console.error("Internal Server Error:", err);
+
         if (res.headersSent) {
             return next(err);
         }
+
         return res.status(status).json({ message });
     });
 
-    // 3. الملفات الثابتة
+    // importantly only setup vite in development and after
+    // setting up all the other routes so the catch-all route
+    // doesn't interfere with the other routes
     if (process.env.NODE_ENV === "production") {
         serveStatic(app);
     } else {
@@ -92,9 +137,19 @@ app.use((req, res, next) => {
         await setupVite(httpServer, app);
     }
 
-    // 4. تشغيل السيرفر (التعديل الأهم لـ Railway)
-    const port = Number(process.env.PORT) || 5000;
-    httpServer.listen(port, "0.0.0.0", () => {
-        log(`serving on port ${port}`);
-    });
+    // ALWAYS serve the app on the port specified in the environment variable PORT
+    // Other ports are firewalled. Default to 5000 if not specified.
+    // this serves both the API and the client.
+    // It is the only port that is not firewalled.
+    const port = parseInt(process.env.PORT || "5000", 10);
+    httpServer.listen(
+        {
+            port,
+            host: "0.0.0.0",
+            reusePort: true,
+        },
+        () => {
+            log(`serving on port ${port}`);
+        },
+    );
 })();
