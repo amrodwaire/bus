@@ -534,7 +534,9 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // === التعديل الحاسم: الرجوع لاستخدام السيرفر الداخلي لتجنب حظر الـ CORS على الموبايل ===
+    // تحديث رابط السيرفر المباشر لتجاوز مشكلة التطبيق (APK) باستخدام رابطك الحقيقي
+    const SERVER_URL = import.meta.env.VITE_API_URL || "https://bus-p4kg.onrender.com";
+
     const searchNominatim = useCallback(async (q: string) => {
         if (q.trim().length < 2) {
             setResults([]);
@@ -546,8 +548,10 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
 
         try {
             const lang = isRTL ? "ar" : "en";
-            // الموبايل يكلم سيرفرك، وسيرفرك بيكلم الخرائط (هذا المسار اللي برمجه ريبلت واللي بيشتغل صح)
-            const res = await fetch(`/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`);
+
+            const url = `${SERVER_URL}/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`;
+
+            const res = await fetch(url);
 
             if (res.ok) {
                 const data: SearchResult[] = await res.json();
