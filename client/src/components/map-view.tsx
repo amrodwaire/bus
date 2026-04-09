@@ -534,7 +534,7 @@ function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.Ref
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // تحديث رابط السيرفر المباشر لتجاوز مشكلة التطبيق (APK) باستخدام رابطك الحقيقي
+    // تحديث الرابط الحقيقي تبعك 100%
     const SERVER_URL = import.meta.env.VITE_API_URL || "https://bus-p4kg.onrender.com";
 
     const searchNominatim = useCallback(async (q: string) => {
