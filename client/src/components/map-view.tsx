@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap, useMapEvents } from "react-leaflet";
-import { divIcon, latLngBounds, DomEvent } from "leaflet";
+import { divIcon, latLngBounds, DomEvent, Map as LeafletMap } from "leaflet";
 import { Bus, Search, X, MapPin } from "lucide-react";
 import type { Bus as BusType, RouteWaypoint } from "@shared/schema";
 import { useLanguage } from "@/lib/language-context";
@@ -270,9 +270,6 @@ export function MapView({
 }: MapViewProps) {
     const { t, isRTL } = useLanguage();
 
-    // المرجع (Ref) للخريطة عشان نعطيه لمربع البحث اللي صار برا
-    const mapRef = useRef<any>(null);
-
     const defaultCenter = { lat: 31.9539, lng: 35.9106 };
     const center = userLocation || defaultCenter;
     const visibleBuses = buses.filter(b => (showHiddenBuses || b.isVisible) && b.currentLat && b.currentLng);
@@ -289,6 +286,7 @@ export function MapView({
                 : null;
 
     const hasBothRoutePoints = routeFrom && routeTo;
+    const mapRef = useRef<LeafletMap | null>(null);
 
     return (
         <div
@@ -300,7 +298,7 @@ export function MapView({
                 zoom={14}
                 style={{ height: '100%', width: '100%' }}
                 zoomControl={false}
-                ref={mapRef} // ربطنا الخريطة بالمرجع
+                ref={mapRef}
             >
                 <TileLayer
                     attribution='&copy; <a href="https://carto.com/">carto.com</a> contributors'
@@ -480,25 +478,19 @@ export function MapView({
                         </Popup>
                     </Marker>
                 ))}
-
-                {/* تم نقل الـ SearchBar لبرا הـ MapContainer! */}
-
+                {showUserLocation && userLocation && (
+                    <RecenterButton userLocation={userLocation} />
+                )}
             </MapContainer>
 
-            {/* وضعنا مربع البحث هنا (برا الخريطة كطبقة فوقها) ومررنا المرجع mapRef */}
-            <MapSearchBar isRTL={isRTL} mapRef={mapRef} />
-
-            {/* أزرار الموقع والتنبيهات */}
-            {showUserLocation && userLocation && (
-                <RecenterButton mapRef={mapRef} userLocation={userLocation} />
-            )}
+            <MapSearchOverlay isRTL={isRTL} mapRef={mapRef} />
 
             {routeMapLabel && (
                 <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-[1000] text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg backdrop-blur-sm ${routeMode === "from"
-                    ? "bg-green-600/90"
-                    : routeMode === "to"
-                        ? "bg-red-500/90"
-                        : "bg-indigo-600/90"
+                        ? "bg-green-600/90"
+                        : routeMode === "to"
+                            ? "bg-red-500/90"
+                            : "bg-indigo-600/90"
                     }`}>
                     {routeMapLabel}
                 </div>
@@ -532,8 +524,7 @@ interface SearchResult {
     lon: string;
 }
 
-// تعديل الدالة لتقبل المرجع mapRef بدل useMap
-function MapSearchBar({ isRTL, mapRef }: { isRTL: boolean, mapRef: React.RefObject<any> }) {
+function MapSearchOverlay({ isRTL, mapRef }: { isRTL: boolean; mapRef: React.RefObject<LeafletMap | null> }) {
     const { t } = useLanguage();
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<SearchResult[]>([]);
@@ -541,7 +532,9 @@ function MapSearchBar({ isRTL, mapRef }: { isRTL: boolean, mapRef: React.RefObje
     const [loading, setLoading] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
     const containerRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
+    // === التعديل الحاسم: الرجوع لاستخدام السيرفر الداخلي لتجنب حظر الـ CORS على الموبايل ===
     const searchNominatim = useCallback(async (q: string) => {
         if (q.trim().length < 2) {
             setResults([]);
@@ -553,10 +546,8 @@ function MapSearchBar({ isRTL, mapRef }: { isRTL: boolean, mapRef: React.RefObje
 
         try {
             const lang = isRTL ? "ar" : "en";
-            // ظللنا محتفظين بخدعة الإيميل عشان ما ننحظر
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${lang}&email=coster.jordan.app@gmail.com`;
-
-            const res = await fetch(url);
+            // الموبايل يكلم سيرفرك، وسيرفرك بيكلم الخرائط (هذا المسار اللي برمجه ريبلت واللي بيشتغل صح)
+            const res = await fetch(`/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`);
 
             if (res.ok) {
                 const data: SearchResult[] = await res.json();
@@ -565,6 +556,7 @@ function MapSearchBar({ isRTL, mapRef }: { isRTL: boolean, mapRef: React.RefObje
                 setResults([]);
             }
         } catch (error) {
+            console.error("Search API Error:", error);
             setResults([]);
         } finally {
             setLoading(false);
@@ -573,24 +565,27 @@ function MapSearchBar({ isRTL, mapRef }: { isRTL: boolean, mapRef: React.RefObje
 
     const handleInput = (val: string) => {
         setQuery(val);
-        if (val.trim().length > 0) {
-            setIsOpen(true);
-        } else {
-            setIsOpen(false);
+        if (val.trim().length < 2) {
             setResults([]);
+            setIsOpen(false);
+            return;
         }
+        setIsOpen(true);
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => searchNominatim(val), 500);
     };
 
     const selectResult = (r: SearchResult) => {
-        // نستخدم المرجع للتحكم بالخريطة من الخارج
-        if (mapRef.current) {
-            mapRef.current.setView([parseFloat(r.lat), parseFloat(r.lon)], 16, { animate: true });
-        }
+        const lat = parseFloat(r.lat);
+        const lng = parseFloat(r.lon);
         setQuery(r.display_name.split(",")[0]);
         setIsOpen(false);
         setResults([]);
+        inputRef.current?.blur();
+
+        if (mapRef.current) {
+            mapRef.current.setView([lat, lng], 16, { animate: true });
+        }
     };
 
     const clear = () => {
@@ -599,22 +594,48 @@ function MapSearchBar({ isRTL, mapRef }: { isRTL: boolean, mapRef: React.RefObje
         setIsOpen(false);
     };
 
+    useEffect(() => {
+        const handler = (e: MouseEvent | TouchEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handler);
+        document.addEventListener("touchstart", handler);
+        return () => {
+            document.removeEventListener("mousedown", handler);
+            document.removeEventListener("touchstart", handler);
+        };
+    }, []);
+
+    const stopPropagation = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+        e.stopPropagation();
+    }, []);
+
     return (
-        <div ref={containerRef} className="absolute top-3 left-3 right-3 z-[1001]" style={{ direction: isRTL ? "rtl" : "ltr" }}>
+        <div
+            ref={containerRef}
+            className="absolute top-3 left-3 right-3 z-[1002]"
+            style={{ direction: isRTL ? "rtl" : "ltr" }}
+            onMouseDown={stopPropagation}
+            onTouchStart={stopPropagation}
+            onClick={stopPropagation}
+        >
             <div className="relative">
                 <div className="flex items-center bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden relative z-10">
                     <Search className="h-4 w-4 text-muted-foreground mx-3 flex-shrink-0" />
                     <input
+                        ref={inputRef}
                         type="text"
                         value={query}
                         onChange={(e) => handleInput(e.target.value)}
-                        onFocus={() => { if (query.trim().length > 0) setIsOpen(true); }}
+                        onFocus={() => { if (query.trim().length >= 2) setIsOpen(true); }}
                         placeholder={t('searchLocation')}
                         className="flex-1 py-2.5 bg-transparent text-sm outline-none placeholder:text-muted-foreground w-full"
                         data-testid="input-map-search"
                     />
                     {query && (
-                        <button onClick={clear} className="px-3 text-muted-foreground hover:text-foreground h-full flex items-center justify-center" data-testid="button-clear-search">
+                        <button onClick={clear} className="px-3 py-2 text-muted-foreground hover:text-foreground h-full flex items-center justify-center" data-testid="button-clear-search">
                             <X className="h-4 w-4" />
                         </button>
                     )}
@@ -651,16 +672,12 @@ function MapSearchBar({ isRTL, mapRef }: { isRTL: boolean, mapRef: React.RefObje
     );
 }
 
-// تعديل زر الموقع عشان يستخدم المرجع كمان
-function RecenterButton({ userLocation, mapRef }: { userLocation: { lat: number; lng: number }, mapRef: React.RefObject<any> }) {
+function RecenterButton({ userLocation }: { userLocation: { lat: number; lng: number } }) {
+    const map = useMap();
     const { t } = useLanguage();
     return (
         <button
-            onClick={() => {
-                if (mapRef.current) {
-                    mapRef.current.setView([userLocation.lat, userLocation.lng], 17, { animate: true });
-                }
-            }}
+            onClick={() => map.setView([userLocation.lat, userLocation.lng], 17, { animate: true })}
             className="absolute bottom-5 end-3 z-[1000] bg-white dark:bg-zinc-800 rounded-full shadow-xl border-2 border-blue-400 flex items-center gap-2 px-3 py-2 hover:bg-blue-50 dark:hover:bg-zinc-700 active:scale-95 transition-all"
             data-testid="button-recenter-map"
             title={t('myLocation')}
