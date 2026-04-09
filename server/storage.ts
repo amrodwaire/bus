@@ -29,8 +29,11 @@ export interface IStorage {
     getAllRouteWaypoints(): Promise<Record<string, RouteWaypoint[]>>;
     deleteRouteWaypoints(busId: string): Promise<void>;
     createRouteWaypoint(wp: InsertRouteWaypoint): Promise<RouteWaypoint>;
-    createReservation(reservation: InsertReservation): Promise<Reservation>;
     getActiveReservationByUser(userId: string): Promise<Reservation | undefined>;
+    getReservationsByUser(userId: string): Promise<(Reservation & { bus?: Bus })[]>;
+    getReservationsByBus(busId: string): Promise<Reservation[]>;
+    createReservation(reservation: InsertReservation): Promise<Reservation>;
+    updateReservation(id: string, updates: Partial<Reservation>): Promise<Reservation | undefined>;
     getNextPriority(busId: string): Promise<number>;
     sessionStore: sessionContainer.Store;
 }
@@ -47,34 +50,22 @@ export class MemStorage implements IStorage {
         this.buses = new Map();
         this.routeWaypoints = new Map();
         this.reservations = new Map();
-        // إعداد مخزن الجلسات للذاكرة (ضروري لتجنب تسريب الذاكرة في ريندر)
         this.sessionStore = new MemoryStore({ checkPeriod: 86400000 });
         this.seedData();
     }
 
     private seedData() {
+        // حسابات تجريبية ثابتة لضمان الدخول - مطابق لصور image_ab4561
         const dId = "driver-123";
         this.users.set(dId, {
-            id: dId,
-            username: "driver1",
-            password: "123456",
-            fullName: "أحمد السائق",
-            role: "driver",
-            phone: "0790000000",
-            nationalId: "111",
-            licenseNumber: "DL-123"
+            id: dId, username: "driver1", password: "123456", fullName: "أحمد السائق",
+            role: "driver", phone: "0790000000", nationalId: "111", licenseNumber: "DL-123"
         } as any);
 
         const uId = "user-123";
         this.users.set(uId, {
-            id: uId,
-            username: "user1",
-            password: "123456",
-            fullName: "سارة المواطنة",
-            role: "citizen",
-            phone: "0780000000",
-            nationalId: "222",
-            licenseNumber: null
+            id: uId, username: "user1", password: "123456", fullName: "سارة المواطنة",
+            role: "citizen", phone: "0780000000", nationalId: "222", licenseNumber: null
         } as any);
     }
 
@@ -116,7 +107,7 @@ export class MemStorage implements IStorage {
             .sort((a, b) => a.orderIndex - b.orderIndex);
     }
 
-    // إصلاح الخطأ الموضح في الصورة image_aac184
+    // إصلاح الخطأ الموضح في image_ab4584
     async getAllRouteWaypoints() {
         const res: Record<string, RouteWaypoint[]> = {};
         const waypoints = Array.from(this.routeWaypoints.values());
@@ -134,7 +125,7 @@ export class MemStorage implements IStorage {
         return newWp;
     }
 
-    // إصلاح الخطأ الموضح في الصورة image_aab9c2
+    // إصلاح الخطأ الموضح في image_ab484b
     async deleteRouteWaypoints(busId: string) {
         const entries = Array.from(this.routeWaypoints.entries());
         for (const [id, wp] of entries) {
@@ -149,6 +140,17 @@ export class MemStorage implements IStorage {
             .find(r => r.passengerId === userId && r.status === "confirmed");
     }
 
+    async getReservationsByUser(userId: string) {
+        return Array.from(this.reservations.values())
+            .filter(r => r.passengerId === userId)
+            .map(r => ({ ...r, bus: this.buses.get(r.busId) })) as any;
+    }
+
+    async getReservationsByBus(busId: string) {
+        return Array.from(this.reservations.values())
+            .filter(r => r.busId === busId && r.status === "confirmed");
+    }
+
     async createReservation(res: InsertReservation) {
         const id = randomUUID();
         const newRes = { ...res, id, createdAt: new Date() } as any;
@@ -156,6 +158,15 @@ export class MemStorage implements IStorage {
         return newRes;
     }
 
+    async updateReservation(id: string, updates: Partial<Reservation>) {
+        const res = this.reservations.get(id);
+        if (!res) return undefined;
+        const updated = { ...res, ...updates };
+        this.reservations.set(id, updated);
+        return updated;
+    }
+
+    // إصلاح الخطأ في image_ab484b
     async getNextPriority(busId: string) {
         const list = Array.from(this.reservations.values()).filter(r => r.busId === busId);
         return list.length + 1;

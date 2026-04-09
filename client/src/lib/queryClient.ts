@@ -1,7 +1,10 @@
 ﻿import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// 👈 الرابط الثابت لسيرفرك على Render (استبدله برابطك الحقيقي إذا كان مختلفاً)
-const API_BASE_URL = "https://bus-app.onrender.com";
+/**
+ * 👈 هذا هو الرابط الذي ظهر في صورتك الأخيرة (رابط السيرفر)
+ * نستخدمه هنا ليربط الموبايل بالسيرفر مباشرة
+ */
+const API_BASE_URL = "https://bus-p4kg.onrender.com";
 
 async function throwIfResNotOk(res: Response) {
     if (!res.ok) {
@@ -15,14 +18,13 @@ export async function apiRequest(
     url: string,
     data?: unknown | undefined,
 ): Promise<Response> {
-    // توجيه الطلب للسيرفر الحقيقي
     const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
 
     const res = await fetch(fullUrl, {
         method,
         headers: data ? { "Content-Type": "application/json" } : {},
         body: data ? JSON.stringify(data) : undefined,
-        credentials: "include", // 👈 مهم جداً لبقاء تسجيل الدخول
+        credentials: "include", // مهم جداً لبقاء المستخدم مسجل دخول
     });
 
     await throwIfResNotOk(res);
@@ -30,17 +32,17 @@ export async function apiRequest(
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
+
 export const getQueryFn: <T>(options: {
     on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
     ({ on401: unauthorizedBehavior }) =>
         async ({ queryKey }) => {
-            // توجيه جلب البيانات للسيرفر الحقيقي
             const urlPath = queryKey.join("/") as string;
-            const fullUrl = urlPath.startsWith("http") ? urlPath : `${API_BASE_URL}/${urlPath}`;
+            const fullUrl = urlPath.startsWith("http") ? urlPath : `${API_BASE_URL}/api/${urlPath}`;
 
             const res = await fetch(fullUrl, {
-                credentials: "include", // 👈 مهم جداً لبقاء تسجيل الدخول
+                credentials: "include",
             });
 
             if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -55,9 +57,9 @@ export const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
             queryFn: getQueryFn({ on401: "throw" }),
-            refetchInterval: false,
-            refetchOnWindowFocus: false,
-            staleTime: Infinity,
+            refetchInterval: 5000, // تحديث تلقائي كل 5 ثوانٍ لمراقبة حركة الباصات
+            refetchOnWindowFocus: true,
+            staleTime: 0,
             retry: false,
         },
         mutations: {
