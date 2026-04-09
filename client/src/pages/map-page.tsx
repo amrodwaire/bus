@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bus, MapPin, X, Check, AlertCircle, Navigation2, Filter, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
+import { Bus, MapPin, X, Check, AlertCircle, Navigation2, Filter, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +74,23 @@ export default function MapPage() {
         enabled: !!user?.id && user?.role === "citizen",
     });
 
+    // ============ TRAFFIC ALERTS INTEGRATION ============
+    const { data: trafficAlerts = [] } = useQuery<any[]>({
+        queryKey: ["/api/traffic-alerts"],
+        refetchInterval: 5000, // تحديث الخريطة بالبلاغات كل 5 ثواني
+    });
+
+    // تحويل البلاغات لعلامات (Markers) جاهزة للخريطة
+    const alertMarkers = useMemo(() => {
+        return trafficAlerts.map((alert: any) => ({
+            userId: alert.id, // استخدام ID البلاغ
+            name: alert.type === 'road_closed' ? '⛔ طريق مغلق (تنبيه)' : '🚗 أزمة مرورية (تنبيه)',
+            lat: alert.lat,
+            lng: alert.lng
+        }));
+    }, [trafficAlerts]);
+    // ====================================================
+
     const hasActiveReservation = !!activeReservation;
 
     useEffect(() => {
@@ -124,7 +141,6 @@ export default function MapPage() {
         },
     });
 
-    // Auto-cancel reservation when passenger moves >100m from pickup
     useEffect(() => {
         if (!userLocation || !activeReservation || autoCancelledRef.current) return;
         if (!gpsReadyRef.current) return;
@@ -245,7 +261,6 @@ export default function MapPage() {
     };
     const confirmReservation = () => { if (selectedBus && user) reserveMutation.mutate(selectedBus.id); };
 
-    // Handle map click for route selection
     const handleMapClick = async (lat: number, lng: number) => {
         if (routeStep === 1) {
             if (userLocation) {
@@ -264,7 +279,6 @@ export default function MapPage() {
             setFromPoint({ lat, lng, gov: clickedGov });
             setRouteStep(2);
         } else if (routeStep === 2) {
-            // Validation 2: to point must be at least 300m from the from point
             if (fromPoint) {
                 const distFromStart = getDistanceMeters(fromPoint.lat, fromPoint.lng, lat, lng);
                 if (distFromStart < 300) {
@@ -332,11 +346,9 @@ export default function MapPage() {
         setRouteStep(1);
     };
 
-    // Check if a bus's driver-defined route overlaps with the citizen's planned route
     const busRouteMatchesCitizenRoute = (busId: string, citizenPath: [number, number][] | { lat: number; lng: number }[]): boolean => {
         const waypoints = allBusRoutes[busId];
         if (!waypoints || waypoints.length === 0) return false;
-        // At least one bus waypoint must be physically close to the citizen's path
         return waypoints.some(wp =>
             isNearRoute({ lat: wp.lat, lng: wp.lng }, citizenPath, 1500)
         );
@@ -355,11 +367,9 @@ export default function MapPage() {
                 const hasDriverRoute = busWaypoints && busWaypoints.length > 0;
 
                 if (hasDriverRoute && routeResult) {
-                    // Smart match: compare driver's stops against citizen's road path
                     const routeOverlaps = busRouteMatchesCitizenRoute(b.id, routeResult.coordinates);
                     if (!routeOverlaps) return false;
                 } else {
-                    // Fallback when no driver route defined: use governorate matching
                     const destGov = b.destinationGovernorate as Governorate | null;
                     const headingToDestination = destGov === toPoint.gov;
                     const nearRoute = routeResult && isNearRoute(
@@ -370,7 +380,6 @@ export default function MapPage() {
                     if (!headingToDestination && !nearRoute) return false;
                 }
 
-                // Always hide buses that have already passed the user's position
                 if (userLocation && hasBusPassed(
                     { lat: busLat, lng: busLng },
                     userLocation,
@@ -521,7 +530,6 @@ export default function MapPage() {
             <section className="p-4 relative z-0">
                 <MapView
                     buses={(() => {
-                        // Always include the reserved bus on the map even if filtered out
                         if (!activeReservation?.busId) return filteredBuses;
                         const alreadyIncluded = filteredBuses.some(b => b.id === activeReservation.busId);
                         if (alreadyIncluded) return filteredBuses;
@@ -542,6 +550,8 @@ export default function MapPage() {
                     passengerPickups={citizenPickupMarker}
                     reservedBusId={activeReservation?.busId}
                     walkingPath={walkingPath}
+                    // تمرير بلاغات المرور ليتم رسمها على الخريطة
+                    citizenMarkers={alertMarkers}
                 />
             </section>
 
