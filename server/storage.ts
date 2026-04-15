@@ -14,39 +14,40 @@ import * as schema from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { eq, and, desc, inArray, max } from "drizzle-orm";
+import sessionContainer from "express-session";
+import MemoryStoreFactory from "memorystore";
+
+const MemoryStore = MemoryStoreFactory(sessionContainer);
+
+export interface CitizenLocation {
+    lat: number;
+    lng: number;
+    timestamp: number;
+}
 
 const { Pool } = pg;
 
-// 🔗 تم دمج رابط قاعدة البيانات الخاص بك ليعمل الكود فوراً
-const DATABASE_URL = process.env.DATABASE_URL || "postgresql://bus_w3id_user:npZkYzgf50Xp6T68keN9oR6CDXYGw0lk@dpg-d79sr87kijhs73dui1eg-a/bus_w3id";
-
 const pool = new Pool({
-    connectionString: DATABASE_URL,
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
 });
 
 export const db = drizzle(pool, { schema });
 
 export interface IStorage {
-    // Users
     getUser(id: string): Promise<User | undefined>;
     getUserByUsername(username: string): Promise<User | undefined>;
     createUser(user: InsertUser): Promise<User>;
-
-    // Buses
     getBus(id: string): Promise<Bus | undefined>;
     getBusByDriver(driverId: string): Promise<Bus | undefined>;
     getAllBuses(): Promise<Bus[]>;
     getVisibleBuses(): Promise<Bus[]>;
     createBus(bus: InsertBus): Promise<Bus>;
     updateBus(id: string, updates: Partial<Bus>): Promise<Bus | undefined>;
-
-    // Route Waypoints
     getRouteWaypoints(busId: string): Promise<RouteWaypoint[]>;
     getAllRouteWaypoints(): Promise<Record<string, RouteWaypoint[]>>;
     createRouteWaypoint(waypoint: InsertRouteWaypoint): Promise<RouteWaypoint>;
     deleteRouteWaypoints(busId: string): Promise<void>;
-
-    // Reservations
     getReservation(id: string): Promise<Reservation | undefined>;
     getReservationsByUser(userId: string): Promise<(Reservation & { bus?: Bus })[]>;
     getActiveReservationByUser(userId: string): Promise<Reservation | undefined>;
@@ -54,14 +55,26 @@ export interface IStorage {
     createReservation(reservation: InsertReservation): Promise<Reservation>;
     updateReservation(id: string, updates: Partial<Reservation>): Promise<Reservation | undefined>;
     getNextPriority(busId: string): Promise<number>;
-
-    // Issue Reports
     createIssueReport(report: InsertIssueReport): Promise<IssueReport>;
     getIssueReports(): Promise<IssueReport[]>;
+
+    // الدوال الناقصة لتتبع المواقع وإدارة الجلسات
+    setCitizenLocation(userId: string, loc: CitizenLocation): void;
+    getCitizenLocation(userId: string): CitizenLocation | undefined;
+    getCitizenLocationsForBus(busId: string): Promise<{ userId: string; name: string; lat: number; lng: number }[]>;
+    sessionStore: sessionContainer.Store;
 }
 
 export class DatabaseStorage implements IStorage {
-    // Users
+    public sessionStore: sessionContainer.Store;
+    private citizenLocations: Map<string, CitizenLocation>;
+
+    constructor() {
+        // تهيئة إدارة الجلسات ومواقع المواطنين في الذاكرة
+        this.sessionStore = new MemoryStore({ checkPeriod: 86400000 });
+        this.citizenLocations = new Map();
+    }
+
     async getUser(id: string): Promise<User | undefined> {
         const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id));
         return user;
@@ -77,7 +90,6 @@ export class DatabaseStorage implements IStorage {
         return user;
     }
 
-    // Buses
     async getBus(id: string): Promise<Bus | undefined> {
         const [bus] = await db.select().from(schema.buses).where(eq(schema.buses.id, id));
         return bus;
@@ -116,7 +128,6 @@ export class DatabaseStorage implements IStorage {
         return updatedBus;
     }
 
-    // Route Waypoints
     async getRouteWaypoints(busId: string): Promise<RouteWaypoint[]> {
         return await db
             .select()
@@ -148,7 +159,6 @@ export class DatabaseStorage implements IStorage {
         await db.delete(schema.routeWaypoints).where(eq(schema.routeWaypoints.busId, busId));
     }
 
-    // Reservations
     async getReservation(id: string): Promise<Reservation | undefined> {
         const [reservation] = await db.select().from(schema.reservations).where(eq(schema.reservations.id, id));
         return reservation;
@@ -167,7 +177,7 @@ export class DatabaseStorage implements IStorage {
 
         return rows.map(row => ({
             ...row.reservation,
-            bus: row.bus ?? undefined // Use undefined if the bus is null
+            bus: row.bus ?? undefined
         }));
     }
 
@@ -221,11 +231,9 @@ export class DatabaseStorage implements IStorage {
                     inArray(schema.reservations.status, ["pending", "confirmed"])
                 )
             );
-
         return (result.maxPriority ?? 0) + 1;
     }
 
-    // Issue Reports
     async createIssueReport(insertReport: InsertIssueReport): Promise<IssueReport> {
         const [report] = await db.insert(schema.issueReports).values({
             ...insertReport,
@@ -239,6 +247,19 @@ export class DatabaseStorage implements IStorage {
             .select()
             .from(schema.issueReports)
             .orderBy(desc(schema.issueReports.createdAt));
+    }
+
+    // --- تنفيذ الدوال الخاصة بتتبع المواقع ---
+    setCitizenLocation(userId: string, loc: CitizenLocation) {
+        this.citizenLocations.set(userId, loc);
+    }
+
+    getCitizenLocation(userId: string) {
+        return this.citizenLocations.get(userId);
+    }
+
+    async getCitizenLocationsForBus(busId: string) {
+        return [];
     }
 }
 
