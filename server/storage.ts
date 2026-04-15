@@ -57,7 +57,7 @@ export interface IStorage {
     getNextPriority(busId: string): Promise<number>;
     createIssueReport(report: InsertIssueReport): Promise<IssueReport>;
     getIssueReports(): Promise<IssueReport[]>;
-
+    
     // الدوال الناقصة لتتبع المواقع وإدارة الجلسات
     setCitizenLocation(userId: string, loc: CitizenLocation): void;
     getCitizenLocation(userId: string): CitizenLocation | undefined;
