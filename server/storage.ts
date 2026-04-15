@@ -14,16 +14,6 @@ import * as schema from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { eq, and, desc, inArray, max } from "drizzle-orm";
-import sessionContainer from "express-session";
-import MemoryStoreFactory from "memorystore";
-
-const MemoryStore = MemoryStoreFactory(sessionContainer);
-
-export interface CitizenLocation {
-    lat: number;
-    lng: number;
-    timestamp: number;
-}
 
 const { Pool } = pg;
 
@@ -57,24 +47,9 @@ export interface IStorage {
     getNextPriority(busId: string): Promise<number>;
     createIssueReport(report: InsertIssueReport): Promise<IssueReport>;
     getIssueReports(): Promise<IssueReport[]>;
-    
-    // الدوال الناقصة لتتبع المواقع وإدارة الجلسات
-    setCitizenLocation(userId: string, loc: CitizenLocation): void;
-    getCitizenLocation(userId: string): CitizenLocation | undefined;
-    getCitizenLocationsForBus(busId: string): Promise<{ userId: string; name: string; lat: number; lng: number }[]>;
-    sessionStore: sessionContainer.Store;
 }
 
 export class DatabaseStorage implements IStorage {
-    public sessionStore: sessionContainer.Store;
-    private citizenLocations: Map<string, CitizenLocation>;
-
-    constructor() {
-        // تهيئة إدارة الجلسات ومواقع المواطنين في الذاكرة
-        this.sessionStore = new MemoryStore({ checkPeriod: 86400000 });
-        this.citizenLocations = new Map();
-    }
-
     async getUser(id: string): Promise<User | undefined> {
         const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id));
         return user;
@@ -247,19 +222,6 @@ export class DatabaseStorage implements IStorage {
             .select()
             .from(schema.issueReports)
             .orderBy(desc(schema.issueReports.createdAt));
-    }
-
-    // --- تنفيذ الدوال الخاصة بتتبع المواقع ---
-    setCitizenLocation(userId: string, loc: CitizenLocation) {
-        this.citizenLocations.set(userId, loc);
-    }
-
-    getCitizenLocation(userId: string) {
-        return this.citizenLocations.get(userId);
-    }
-
-    async getCitizenLocationsForBus(busId: string) {
-        return [];
     }
 }
 
