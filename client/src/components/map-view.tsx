@@ -78,15 +78,23 @@ function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number
 
 function createBusIcon(availableSeats: number, isSelected: boolean, speed?: number | null) {
     const bgColor = availableSeats === 0 ? '#ef4444' : availableSeats <= 3 ? '#eab308' : '#22c55e';
-    const speedBadge = speed != null && speed > 0
-        ? `<div style="
-        position:absolute;top:-10px;left:-14px;
-        background:#1a73e8;color:white;font-size:9px;font-weight:bold;
-        padding:2px 5px;border-radius:8px;white-space:nowrap;
+
+    const isStopped = speed == null || speed === 0;
+    const speedBadge = `<div style="
+        position:absolute;top:-12px;left:-16px;
+        background:${isStopped ? '#ef4444' : '#1a73e8'};
+        color:white;font-size:9px;font-weight:bold;
+        padding:2px 6px;border-radius:8px;white-space:nowrap;
         box-shadow:0 1px 3px rgba(0,0,0,0.3);border:1.5px solid white;
-        line-height:1.1;z-index:2;
-      ">${speed}<span style="font-size:7px;margin-inline-start:1px">km/h</span></div>`
-        : '';
+        line-height:1.3;z-index:2;
+        display:flex;align-items:center;gap:2px;
+      ">
+        ${isStopped
+            ? `<span style="font-size:8px;">⏸</span> واقف`
+            : `${speed}<span style="font-size:7px;margin-inline-start:1px">km/h</span>`
+        }
+    </div>`;
+
     return divIcon({
         className: 'custom-bus-marker',
         html: `
@@ -433,7 +441,7 @@ export function MapView({
                             position={[bus.currentLat!, bus.currentLng!]}
                             icon={isReserved
                                 ? createReservedBusIcon(availableSeats)
-                                : createBusIcon(availableSeats, isSelected, bus.speed)
+                                : createBusIcon(availableSeats, isSelected, (bus as any).speed)
                             }
                             eventHandlers={{ click: () => onBusClick?.(bus) }}
                             zIndexOffset={isReserved ? 1000 : 0}
@@ -451,8 +459,8 @@ export function MapView({
                                     {bus.price != null && (
                                         <p className="text-sm font-semibold text-green-600 mt-1">{bus.price} {t('jd')}</p>
                                     )}
-                                    {bus.speed != null && bus.speed > 0 && (
-                                        <p className="text-xs text-blue-600 font-semibold mt-1">{bus.speed} {t('kmh')}</p>
+                                    {(bus as any).speed != null && (bus as any).speed > 0 && (
+                                        <p className="text-xs text-blue-600 font-semibold mt-1">{(bus as any).speed} {(t as any)('kmh')}</p>
                                     )}
                                 </div>
                             </Popup>
@@ -531,16 +539,13 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // ============ التعديل السليم: إزالة الـ User-Agent الممنوع ============
     const searchNominatim = useCallback(async (q: string) => {
         if (q.length < 2) { setResults([]); return; }
         setLoading(true);
         try {
             const lang = isRTL ? "ar" : "en";
-            // استخدمنا الرابط المباشر، المتصفح لحاله رح يبعث معلوماته بدون ما نتدخل وتعمل Crash
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${lang}`;
-
-            const res = await fetch(url);
+            // الاتصال بنقطة النهاية (Proxy) المضافة على السيرفر لتجاوز الحظر
+            const res = await fetch(`/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`);
 
             if (res.ok) {
                 const data: SearchResult[] = await res.json();
@@ -555,7 +560,6 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
             setLoading(false);
         }
     }, [isRTL]);
-    // ==================================================================
 
     const handleInput = (val: string) => {
         setQuery(val);

@@ -401,6 +401,34 @@ export async function registerRoutes(
       res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
+    // ============ LOCATION SEARCH PROXY ============
+    app.get("/api/search/location", async (req, res) => {
+        try {
+            const { q, lang } = req.query;
+            if (!q || typeof q !== "string" || q.length < 2) {
+                return res.json([]);
+            }
+            const language = lang === "ar" ? "ar" : "en";
+            // countrycodes=jo عشان يحصر البحث داخل الأردن فقط
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${language}`;
 
+            const response = await fetch(url, {
+                headers: {
+                    "User-Agent": "BusApp/1.0 (bus-p4kg.onrender.com)",
+                    "Accept-Language": language,
+                },
+            });
+
+            if (!response.ok) {
+                return res.json([]);
+            }
+
+            const data = await response.json();
+            res.json(data);
+        } catch (error) {
+            console.error("Location search error:", error);
+            res.json([]);
+        }
+    });
   return httpServer;
 }
