@@ -6,12 +6,19 @@ import { createServer } from "http";
 import { db } from "./storage";
 import * as schema from "@shared/schema";
 import { sql } from "drizzle-orm";
-import { seedIfEmpty } from "./seed"; // 🔥 هذا هو الاستيراد الصح اللي رح يحل المشكلة
+import { seedIfEmpty } from "./seed";
 
+// 👇 هذا السطر اللي كان طاير بالغلط!
 const app = express();
-app.use(cors());
+
+app.use(cors({
+    origin: true, // بيسمح لأي تطبيق (مثل موبايلك) يشبك مع السيرفر
+    credentials: true // 👈 هذا هو السطر السحري اللي بيسمح للـ APK يسجل دخول
+}));
 
 const httpServer = createServer(app);
+
+// ... (باقي الكود زي ما هو تحت)
 
 declare module "http" {
     interface IncomingMessage {
