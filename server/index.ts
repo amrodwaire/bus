@@ -3,7 +3,10 @@ import cors from "cors";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { seedIfEmpty } from "./seed";
+import { db } from "./storage";
+import * as schema from "@shared/schema";
+import { sql } from "drizzle-orm";
+import { seedIfEmpty } from "./seed"; // 🔥 هذا هو الاستيراد الصح اللي رح يحل المشكلة
 
 const app = express();
 app.use(cors());
@@ -61,8 +64,90 @@ app.use((req, res, next) => {
     next();
 });
 
+// ✅ بناء الجداول تلقائياً
+async function createTablesIfNotExist() {
+    try {
+        log("🔧 جاري التحقق من الجداول...");
+
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS users (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+                username TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'citizen',
+                national_id TEXT,
+                license_number TEXT
+            )
+        `);
+
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS buses (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+                driver_id VARCHAR NOT NULL,
+                plate_number TEXT NOT NULL,
+                route_name TEXT NOT NULL,
+                route_name_en TEXT,
+                governorate TEXT,
+                destination_governorate TEXT,
+                total_capacity INTEGER NOT NULL DEFAULT 15,
+                current_passengers INTEGER NOT NULL DEFAULT 0,
+                is_visible BOOLEAN NOT NULL DEFAULT true,
+                current_lat REAL,
+                current_lng REAL,
+                price REAL,
+                speed REAL
+            )
+        `);
+
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS route_waypoints (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+                bus_id VARCHAR NOT NULL,
+                lat REAL NOT NULL,
+                lng REAL NOT NULL,
+                order_index INTEGER NOT NULL,
+                name TEXT
+            )
+        `);
+
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS reservations (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+                passenger_id VARCHAR NOT NULL,
+                bus_id VARCHAR NOT NULL,
+                pickup_lat REAL NOT NULL,
+                pickup_lng REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                priority INTEGER NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        `);
+
+        await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS issue_reports (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id VARCHAR NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        `);
+
+        log("✅ الجداول جاهزة");
+    } catch (error) {
+        log(`❌ خطأ في بناء الجداول: ${error}`);
+        throw error;
+    }
+}
+
 (async () => {
-    // تشغيل الدالة النظيفة لتوليد البيانات المشفرة
+    // ✅ 1. بناء الجداول أولاً
+    await createTablesIfNotExist();
+
+    // ✅ 2. استدعاء التنظيف وإضافة الحسابات الصح من ملف seed.ts الخارجي
     await seedIfEmpty();
 
     await registerRoutes(httpServer, app);
