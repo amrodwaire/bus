@@ -1,23 +1,22 @@
 ﻿import { db } from "./storage";
 import * as schema from "@shared/schema";
-import { eq, inArray } from "drizzle-orm";
 
 export async function seedIfEmpty() {
     try {
-        console.log("🧹 جاري تنظيف الحسابات المشفرة القديمة...");
+        // تحقق إذا في مستخدمين أصلاً — إذا في، لا تعمل شي
+        const existingUsers = await db.select().from(schema.users).limit(1);
+        
+        if (existingUsers.length > 0) {
+            console.log("✅ البيانات موجودة، تخطي الـ seed");
+            return;
+        }
 
-        // مسح الباص عشان نقدر نمسح السائق
-        await db.delete(schema.buses).where(eq(schema.buses.plateNumber, "أ ب ج 1234"));
-
-        // مسح الحسابات القديمة من جذورها
-        await db.delete(schema.users).where(inArray(schema.users.username, ["user1", "driver1"]));
-
-        console.log("🌱 جاري بناء الحسابات بنص عادي (بدون تشفير) ليتطابق مع نظامك...");
+        console.log("🌱 قاعدة البيانات فاضية، جاري إضافة الحسابات التجريبية...");
 
         // إضافة حساب السائق
         const [driver] = await db.insert(schema.users).values({
             username: "driver1",
-            password: "123456", // رجعناها نص عادي
+            password: "123456",
             fullName: "أحمد محمد السائق",
             phone: "0791234567",
             role: "driver",
@@ -25,17 +24,21 @@ export async function seedIfEmpty() {
             licenseNumber: "DRV-001",
         }).returning();
 
+        console.log("✅ تم إنشاء حساب السائق: driver1");
+
         // إضافة حساب المواطن
         await db.insert(schema.users).values({
             username: "user1",
-            password: "123456", // رجعناها نص عادي
+            password: "123456",
             fullName: "محمد علي المواطن",
             phone: "0799876543",
             role: "citizen",
             nationalId: "1234567890",
         });
 
-        // إضافة الباص التجريبي
+        console.log("✅ تم إنشاء حساب المواطن: user1");
+
+        // إضافة باص تجريبي
         await db.insert(schema.buses).values({
             driverId: driver.id,
             plateNumber: "أ ب ج 1234",
@@ -51,7 +54,8 @@ export async function seedIfEmpty() {
             price: 0.5,
         });
 
-        console.log("🎉 تم ضبط الحسابات التجريبية بنجاح!");
+        console.log("✅ تم إنشاء الباص التجريبي");
+        console.log("🎉 جاهز!");
         console.log("👨‍✈️ السائق:  driver1 / 123456");
         console.log("👤 المواطن: user1   / 123456");
 
