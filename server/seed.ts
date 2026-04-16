@@ -1,12 +1,11 @@
 ﻿import { db } from "./storage";
 import * as schema from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
 
 const scryptAsync = promisify(scrypt);
 
-// دالة التشفير (مدمجة هنا لتجنب أخطاء الاستيراد)
 async function hashPassword(password: string) {
     const salt = randomBytes(16).toString("hex");
     const buf = (await scryptAsync(password, salt, 64)) as Buffer;
@@ -15,22 +14,19 @@ async function hashPassword(password: string) {
 
 export async function seedIfEmpty() {
     try {
-        // 🔥 تنظيف الحسابات القديمة اللي الباسوورد تبعها مش مشفر (نص عادي)
-        await db.delete(schema.users).where(eq(schema.users.password, "123456"));
+        console.log("🧹 جاري تنظيف الحسابات التجريبية القديمة...");
 
-        // تحقق إذا في مستخدمين أصلاً (مشفرين وجاهزين)
-        const existingUsers = await db.select().from(schema.users).limit(1);
-        if (existingUsers.length > 0) {
-            console.log("✅ البيانات موجودة مسبقاً ومُشفرة، تخطي الـ seed");
-            return;
-        }
+        // 1. حذف الباص التجريبي القديم عشان نقدر نحذف السائق
+        await db.delete(schema.buses).where(eq(schema.buses.plateNumber, "أ ب ج 1234"));
 
-        console.log("🌱 قاعدة البيانات فاضية أو تم تنظيفها، جاري إضافة البيانات التجريبية...");
+        // 2. حذف حسابات user1 و driver1 المعلقة من جذورها
+        await db.delete(schema.users).where(inArray(schema.users.username, ["user1", "driver1"]));
 
-        // تشفير كلمة المرور
+        console.log("🌱 جاري بناء الحسابات التجريبية من الصفر بتشفير جديد...");
+
         const hashedPassword = await hashPassword("123456");
 
-        // إضافة حساب السائق
+        // إضافة حساب السائق الجديد المشفر
         const [driver] = await db.insert(schema.users).values({
             username: "driver1",
             password: hashedPassword,
@@ -41,7 +37,7 @@ export async function seedIfEmpty() {
             licenseNumber: "DRV-001",
         }).returning();
 
-        // إضافة حساب المواطن
+        // إضافة حساب المواطن الجديد المشفر
         await db.insert(schema.users).values({
             username: "user1",
             password: hashedPassword,
@@ -51,7 +47,7 @@ export async function seedIfEmpty() {
             nationalId: "1234567890",
         });
 
-        // إضافة باص تجريبي
+        // إضافة الباص التجريبي
         await db.insert(schema.buses).values({
             driverId: driver.id,
             plateNumber: "أ ب ج 1234",
@@ -67,7 +63,7 @@ export async function seedIfEmpty() {
             price: 0.5,
         });
 
-        console.log("🎉 البيانات التجريبية جاهزة!");
+        console.log("🎉 تم ضبط الحسابات التجريبية بنجاح 100%!");
         console.log("👨‍✈️ السائق:  driver1 / 123456");
         console.log("👤 المواطن: user1   / 123456");
 
