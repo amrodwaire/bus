@@ -3,6 +3,7 @@ import cors from "cors"; // تم استدعاء المكتبة هنا
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { seedIfEmpty } from "./seed";
 
 const app = express();
 app.use(cors()); // تم تفعيل السماحيات هنا عشان تطبيق الأندرويد يقدر يشبك
@@ -64,7 +65,7 @@ app.use((req, res, next) => {
 
 (async () => {
     await registerRoutes(httpServer, app);
-
+    await seedIfEmpty();
     app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
         const status = err.status || err.statusCode || 500;
         const message = err.message || "Internal Server Error";
