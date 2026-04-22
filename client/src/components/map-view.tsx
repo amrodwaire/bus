@@ -545,7 +545,7 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
         try {
             const lang = isRTL ? "ar" : "en";
             // الاتصال بنقطة النهاية (Proxy) المضافة على السيرفر لتجاوز الحظر
-            const res = await fetch(`/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`);
+            const res = await fetch(`https://bus-p4kg.onrender.com/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`);
 
             if (res.ok) {
                 const data: SearchResult[] = await res.json();
@@ -599,7 +599,7 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
     }, []);
 
     return (
-        <div ref={containerRef} className="absolute top-3 left-3 right-3 z-[1001]" style={{ direction: isRTL ? "rtl" : "ltr" }}>
+        <div ref={containerRef} className="absolute top-3 left-3 right-3" style={{ direction: isRTL ? "rtl" : "ltr", zIndex: 99999, position: 'absolute' }}>
             <div className="relative">
                 <div className="flex items-center bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden">
                     <Search className="h-4 w-4 text-muted-foreground mx-3 flex-shrink-0" />
@@ -620,7 +620,7 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
                 </div>
 
                 {isOpen && (results.length > 0 || loading) && (
-                    <div className="mt-1 bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden max-h-60 overflow-y-auto">
+                    <div className="mt-1 bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-border overflow-hidden max-h-60 overflow-y-auto" style={{ position: 'relative', zIndex: 99999 }}>
                         {loading && results.length === 0 && (
                             <div className="px-4 py-3 text-sm text-muted-foreground text-center">{t('searching')}</div>
                         )}
