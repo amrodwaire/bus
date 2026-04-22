@@ -224,27 +224,18 @@ export default function DriverDashboard() {
 
     const createBusMutation = useMutation({
         mutationFn: async (data: typeof busFormData) => {
-            const payload: any = {
+            const payload = {
                 ...data,
                 driverId: user?.id,
                 price: data.price !== "" ? parseFloat(String(data.price)) : null,
                 destinationGovernorate: data.destinationGovernorate || null,
             };
-
-            // 👈 هذا هو المكان الصحيح للـ fetch
-            return fetch("https://bus-p4kg.onrender.com/api/buses", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-                credentials: "include"
-            }).then(res => {
-                if (!res.ok) throw new Error("Failed to create bus");
-                return res.json();
-            });
+            return apiRequest("POST", "/api/buses", payload);
         },
         onSuccess: () => {
             toast({ title: t('busCreated'), description: t('registerBusDesc') });
             queryClient.invalidateQueries({ queryKey: [`/api/buses/driver/${user?.id}`] });
+            queryClient.invalidateQueries({ queryKey: ["/api/buses"] });
         },
         onError: () => {
             toast({ title: t('error'), description: t('error'), variant: "destructive" });
