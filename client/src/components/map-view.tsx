@@ -544,8 +544,10 @@ function MapSearchBar({ isRTL }: { isRTL: boolean }) {
         setLoading(true);
         try {
             const lang = isRTL ? "ar" : "en";
-            // الاتصال بنقطة النهاية (Proxy) المضافة على السيرفر لتجاوز الحظر
-            const res = await fetch(`https://bus-p4kg.onrender.com/api/search/location?q=${encodeURIComponent(q)}&lang=${lang}`);
+            // 🔥 طلب مباشر من الموبايل للخرائط العالمية لتجاوز حظر سيرفرات ريندر
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${lang}`;
+
+            const res = await fetch(url);
 
             if (res.ok) {
                 const data: SearchResult[] = await res.json();
