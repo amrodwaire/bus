@@ -18,7 +18,8 @@ export async function apiRequest(
     url: string,
     data?: unknown | undefined,
 ): Promise<Response> {
-    const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
+    // إصلاح الرابط هنا لتجنب التكرار
+    const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
 
     const res = await fetch(fullUrl, {
         method,
@@ -39,7 +40,9 @@ export const getQueryFn: <T>(options: {
     ({ on401: unauthorizedBehavior }) =>
         async ({ queryKey }) => {
             const urlPath = queryKey.join("/") as string;
-            const fullUrl = urlPath.startsWith("http") ? urlPath : `${API_BASE_URL}/api/${urlPath}`;
+
+            // 🔥 هنا كان الخطأ (تم إزالة /api/ المكررة وإصلاح دمج الرابط)
+            const fullUrl = urlPath.startsWith("http") ? urlPath : `${API_BASE_URL}${urlPath.startsWith('/') ? '' : '/'}${urlPath}`;
 
             const res = await fetch(fullUrl, {
                 credentials: "include",
