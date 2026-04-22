@@ -230,7 +230,17 @@ export default function DriverDashboard() {
                 price: data.price !== "" ? parseFloat(String(data.price)) : null,
                 destinationGovernorate: data.destinationGovernorate || null,
             };
-            return apiRequest("POST", "/api/buses", payload);
+
+            // 👈 هذا هو المكان الصحيح للـ fetch
+            return fetch("https://bus-p4kg.onrender.com/api/buses", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                credentials: "include"
+            }).then(res => {
+                if (!res.ok) throw new Error("Failed to create bus");
+                return res.json();
+            });
         },
         onSuccess: () => {
             toast({ title: t('busCreated'), description: t('registerBusDesc') });
