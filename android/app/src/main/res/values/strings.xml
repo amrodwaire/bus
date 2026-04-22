@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-	<string name="app_name">كوستر</string>
+	<string name="app_name">Coaster</string>
     <string name="title_activity_main">BusConnect</string>
     <string name="package_name">com.yourname.busconnect</string>
     <string name="custom_url_scheme">com.yourname.busconnect</string>
