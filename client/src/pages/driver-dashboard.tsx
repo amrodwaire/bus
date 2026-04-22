@@ -597,12 +597,15 @@ export default function DriverDashboard() {
                             )}
                             <span className="font-medium">{t('busVisibility')}</span>
                         </div>
-                        <Switch
-                            checked={driverBus.isVisible}
-                            onCheckedChange={handleVisibilityToggle}
-                            data-testid="switch-visibility"
-                        />
-                    </div>
+
+                        <div dir="ltr">
+                            <Switch
+                                checked={driverBus.isVisible}
+                                onCheckedChange={handleVisibilityToggle}
+                                data-testid="switch-visibility"
+                            />
+                        </div>
+                    </div> {}
                 </Card>
 
                 <Card className="p-4">
