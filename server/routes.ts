@@ -1,434 +1,583 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { insertUserSchema, insertBusSchema, insertReservationSchema, insertIssueReportSchema } from "@shared/schema";
+import type { Express, RequestHandler } from "express";
+import type { Server } from "http";
+import { and, eq, inArray, max } from "drizzle-orm";
 import { z } from "zod";
+import { db, storage } from "./storage";
+import {
+  buses,
+  insertUserSchema,
+  insertBusSchema,
+  reservations,
+} from "@shared/schema";
+import { authenticateUser, hashPassword, requireAuth, requireRole, stripPassword } from "./auth";
+
+const loginSchema = z.object({
+  username: z.string().trim().min(1),
+  password: z.string().min(1),
+});
+
+const reservationRequestSchema = z.object({
+  busId: z.string().min(1),
+  pickupLat: z.number().finite(),
+  pickupLng: z.number().finite(),
+});
+
+const reservationStatusSchema = z.object({
+  status: z.enum(["pending", "confirmed", "completed", "cancelled"]),
+});
+
+const reportSchema = z.object({
+  category: z.string().trim().min(1),
+  description: z.string().trim().min(1),
+});
+
+const waypointsSchema = z.object({
+  waypoints: z.array(
+    z.object({
+      lat: z.number().finite(),
+      lng: z.number().finite(),
+      name: z.string().trim().min(1).nullable().optional(),
+    }),
+  ),
+});
+
+function canAccessUserResource(requesterId: string | undefined, targetUserId: string) {
+  return requesterId === targetUserId;
+}
+
+function readParam(value: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getBusDistanceViolationMessage() {
+  return "موقعك بعيد جداً عن مسار الباص. يرجى اختيار باص أقرب إليك";
+}
+
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 10;
+
+function isRateLimitedLogin(ip: string) {
+  const now = Date.now();
+  const attempts = loginAttempts.get(ip);
+  if (!attempts || attempts.resetAt <= now) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return false;
+  }
+
+  attempts.count += 1;
+  loginAttempts.set(ip, attempts);
+  return attempts.count > MAX_LOGIN_ATTEMPTS;
+}
+
+function clearLoginAttempts(ip: string) {
+  loginAttempts.delete(ip);
+}
+
+const loginRateLimit: RequestHandler = (req, res, next) => {
+  const requesterIp = req.ip ?? "unknown";
+  if (isRateLimitedLogin(requesterIp)) {
+    return res.status(429).json({ message: "محاولات كثيرة، حاول لاحقاً" });
+  }
+  res.locals.requesterIp = requesterIp;
+  next();
+};
 
 export async function registerRoutes(
   httpServer: Server,
-  app: Express
+  app: Express,
 ): Promise<Server> {
-  
-  // ============ AUTH ROUTES ============
-  
-  // Login
-  app.post("/api/auth/login", async (req, res) => {
+  app.get("/api/auth/csrf-token", (req, res) => {
+    return res.json({ csrfToken: req.session.csrfToken });
+  });
+
+  app.post("/api/auth/login", loginRateLimit, async (req, res) => {
     try {
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
+      const requesterIp = (res.locals.requesterIp as string) ?? "unknown";
+
+      const parseResult = loginSchema.safeParse(req.body);
+      if (!parseResult.success) {
         return res.status(400).json({ message: "اسم المستخدم وكلمة المرور مطلوبان" });
       }
-      
-      const user = await storage.getUserByUsername(username);
-      
-      if (!user || user.password !== password) {
+
+      const user = await authenticateUser(parseResult.data.username, parseResult.data.password);
+      if (!user) {
         return res.status(401).json({ message: "اسم المستخدم أو كلمة المرور غير صحيحة" });
       }
-      
-      // Don't send password back
-      const { password: _, ...userWithoutPassword } = user;
-      res.json({ user: userWithoutPassword });
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+
+      clearLoginAttempts(requesterIp);
+      req.session.userId = user.id;
+      req.user = user;
+      return res.json({ user: stripPassword(user) });
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // Register
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const parseResult = insertUserSchema.safeParse(req.body);
-      
-      if (!parseResult.success) {
-        return res.status(400).json({ message: "بيانات غير صالحة", errors: parseResult.error.errors });
+      const userParse = insertUserSchema
+        .extend({
+          username: z.string().trim().min(1),
+          password: z.string().min(6),
+          fullName: z.string().trim().min(1),
+          phone: z.string().trim().min(1),
+          role: z.enum(["citizen", "driver"]).default("citizen"),
+          nationalId: z.string().trim().nullable().optional(),
+          licenseNumber: z.string().trim().nullable().optional(),
+        })
+        .safeParse(req.body);
+
+      if (!userParse.success) {
+        return res.status(400).json({ message: "بيانات غير صالحة", errors: userParse.error.errors });
       }
-      
-      const existingUser = await storage.getUserByUsername(parseResult.data.username);
+
+      const existingUser = await storage.getUserByUsername(userParse.data.username);
       if (existingUser) {
         return res.status(400).json({ message: "اسم المستخدم مستخدم بالفعل" });
       }
-      
-      const user = await storage.createUser(parseResult.data);
-      const { password: _, ...userWithoutPassword } = user;
-      
-      res.status(201).json({ user: userWithoutPassword });
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+
+      const hashedPassword = await hashPassword(userParse.data.password);
+      const user = await storage.createUser({
+        ...userParse.data,
+        password: hashedPassword,
+        nationalId: userParse.data.nationalId ?? null,
+        licenseNumber: userParse.data.licenseNumber ?? null,
+      });
+
+      req.session.userId = user.id;
+      req.user = user;
+      return res.status(201).json({ user: stripPassword(user) });
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // ============ BUS ROUTES ============
-  
-  // Get all visible buses
-  app.get("/api/buses", async (req, res) => {
+  app.post("/api/auth/logout", requireAuth, async (req, res) => {
+    req.session.destroy((error) => {
+      if (error) {
+        return res.status(500).json({ message: "تعذر تسجيل الخروج" });
+      }
+      res.clearCookie("connect.sid");
+      return res.json({ message: "تم تسجيل الخروج" });
+    });
+  });
+
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
+    return res.json({ user: stripPassword(req.user!) });
+  });
+
+  app.get("/api/buses", async (_req, res) => {
     try {
-      const buses = await storage.getVisibleBuses();
-      res.json(buses);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+      const visibleBuses = await storage.getVisibleBuses();
+      return res.json(visibleBuses);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // Get bus by driver ID
-  app.get("/api/buses/driver/:driverId", async (req, res) => {
+  app.get("/api/buses/driver/:driverId", requireRole("driver"), async (req, res) => {
     try {
-      const bus = await storage.getBusByDriver(req.params.driverId);
-      res.json(bus || null);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+      const driverId = readParam(req.params.driverId);
+      if (!canAccessUserResource(req.user?.id, driverId)) {
+        return res.status(403).json({ message: "ليس لديك صلاحية للوصول" });
+      }
+
+      const bus = await storage.getBusByDriver(driverId);
+      return res.json(bus ?? null);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // Get single bus
   app.get("/api/buses/:id", async (req, res) => {
     try {
-      const bus = await storage.getBus(req.params.id);
+      const busId = readParam(req.params.id);
+      const bus = await storage.getBus(busId);
       if (!bus) {
         return res.status(404).json({ message: "الباص غير موجود" });
       }
-      res.json(bus);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+      return res.json(bus);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // Create bus
-  app.post("/api/buses", async (req, res) => {
+  app.post("/api/buses", requireRole("driver"), async (req, res) => {
     try {
       const parseResult = insertBusSchema.safeParse(req.body);
-      
       if (!parseResult.success) {
         return res.status(400).json({ message: "بيانات غير صالحة", errors: parseResult.error.errors });
       }
-      
+
+      if (parseResult.data.driverId !== req.user!.id) {
+        return res.status(403).json({ message: "لا يمكنك إنشاء باص لسائق آخر" });
+      }
+
       const bus = await storage.createBus(parseResult.data);
-      res.status(201).json(bus);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+      return res.status(201).json(bus);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // Update bus
-  app.patch("/api/buses/:id", async (req, res) => {
+  app.patch("/api/buses/:id", requireRole("driver"), async (req, res) => {
     try {
-      const currentBus = await storage.getBus(req.params.id);
+      const busId = readParam(req.params.id);
+      const currentBus = await storage.getBus(busId);
       if (!currentBus) {
         return res.status(404).json({ message: "الباص غير موجود" });
       }
-      
-      // Only allow specific fields to be updated
+
+      if (currentBus.driverId !== req.user!.id) {
+        return res.status(403).json({ message: "لا يمكنك تعديل هذا الباص" });
+      }
+
       const allowedFields = ["currentPassengers", "isVisible", "currentLat", "currentLng", "routeName", "price"];
-      const updates: Record<string, any> = {};
-      
+      const updates: Record<string, unknown> = {};
+
       for (const field of allowedFields) {
         if (req.body[field] !== undefined) {
           updates[field] = req.body[field];
         }
       }
-      
-      // Validate currentPassengers
+
       if (updates.currentPassengers !== undefined) {
         const passengers = Number(updates.currentPassengers);
-        if (isNaN(passengers) || passengers < 0 || passengers > currentBus.totalCapacity) {
+        if (Number.isNaN(passengers) || passengers < 0 || passengers > currentBus.totalCapacity) {
           return res.status(400).json({ message: "عدد الركاب غير صالح" });
         }
         updates.currentPassengers = passengers;
-        
-        // Auto-hide bus if full
+
         if (passengers >= currentBus.totalCapacity) {
           updates.isVisible = false;
         }
       }
-      
-      const bus = await storage.updateBus(req.params.id, updates);
-      
-      res.json(bus);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+
+      const bus = await storage.updateBus(busId, updates);
+      return res.json(bus);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // ============ ROUTE WAYPOINTS ============
-
-  // Get all bus routes (busId → waypoints[])
-  app.get("/api/routes", async (req, res) => {
+  app.get("/api/routes", async (_req, res) => {
     try {
       const allRoutes = await storage.getAllRouteWaypoints();
-      res.json(allRoutes);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+      return res.json(allRoutes);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // Get route waypoints
   app.get("/api/routes/:busId", async (req, res) => {
     try {
-      const waypoints = await storage.getRouteWaypoints(req.params.busId);
-      res.json(waypoints);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+      const busId = readParam(req.params.busId);
+      const waypoints = await storage.getRouteWaypoints(busId);
+      return res.json(waypoints);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // Set route waypoints (replaces existing)
-  app.post("/api/routes/:busId", async (req, res) => {
+  app.post("/api/routes/:busId", requireRole("driver"), async (req, res) => {
     try {
-      const { waypoints } = req.body;
-      
-      if (!Array.isArray(waypoints)) {
-        return res.status(400).json({ message: "بيانات غير صالحة" });
-      }
-      
-      // Delete existing waypoints
-      await storage.deleteRouteWaypoints(req.params.busId);
-      
-      // Create new waypoints
-      const createdWaypoints = [];
-      for (let i = 0; i < waypoints.length; i++) {
-        const wp = await storage.createRouteWaypoint({
-          busId: req.params.busId,
-          lat: waypoints[i].lat,
-          lng: waypoints[i].lng,
-          orderIndex: i,
-          name: waypoints[i].name || null
-        });
-        createdWaypoints.push(wp);
-      }
-      
-      res.status(201).json(createdWaypoints);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
-    }
-  });
-
-  // ============ RESERVATION ROUTES ============
-  
-  // Get user's reservations
-  app.get("/api/reservations/user/:userId", async (req, res) => {
-    try {
-      const reservations = await storage.getReservationsByUser(req.params.userId);
-      res.json(reservations);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
-    }
-  });
-
-  // Get user's active reservation
-  app.get("/api/reservations/user/:userId/active", async (req, res) => {
-    try {
-      const reservation = await storage.getActiveReservationByUser(req.params.userId);
-      res.json(reservation || null);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
-    }
-  });
-
-  // Get bus reservations (with passenger info)
-  app.get("/api/reservations/bus/:busId", async (req, res) => {
-    try {
-      const reservations = await storage.getReservationsByBus(req.params.busId);
-      const withPassengers = await Promise.all(
-        reservations.map(async (r) => {
-          const passenger = await storage.getUser(r.passengerId);
-          return {
-            ...r,
-            passengerName: passenger?.fullName ?? null,
-            passengerPhone: passenger?.phone ?? null,
-          };
-        })
-      );
-      res.json(withPassengers);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
-    }
-  });
-
-  // Create reservation
-  app.post("/api/reservations", async (req, res) => {
-    try {
-      const { busId, pickupLat, pickupLng, passengerId } = req.body;
-      
-      if (!busId || pickupLat === undefined || pickupLng === undefined) {
-        return res.status(400).json({ message: "بيانات غير صالحة" });
-      }
-      
-      // Check if bus exists and has capacity
+      const busId = readParam(req.params.busId);
       const bus = await storage.getBus(busId);
       if (!bus) {
         return res.status(404).json({ message: "الباص غير موجود" });
       }
-      
-      if (bus.currentPassengers >= bus.totalCapacity) {
-        return res.status(400).json({ message: "الباص ممتلئ" });
+      if (bus.driverId !== req.user!.id) {
+        return res.status(403).json({ message: "لا يمكنك تعديل هذا المسار" });
       }
 
-      // Check if user already has an active reservation
-      if (passengerId && passengerId !== "anonymous") {
-        const existingReservation = await storage.getActiveReservationByUser(passengerId);
-        if (existingReservation) {
-          return res.status(400).json({ 
-            message: "لديك حجز نشط بالفعل. يرجى إلغاء حجزك الحالي قبل حجز باص جديد",
-            code: "ACTIVE_RESERVATION_EXISTS"
-          });
-        }
+      const parseResult = waypointsSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "بيانات غير صالحة", errors: parseResult.error.errors });
       }
-      
-      // Validate pickup location is on the route (ahead of bus)
-      // Simplified validation: check if pickup is within reasonable distance of bus
-      if (bus.currentLat && bus.currentLng) {
-        const busLat = bus.currentLat;
-        const busLng = bus.currentLng;
-        
-        // Calculate simple distance (in degrees, roughly)
-        const latDiff = pickupLat - busLat;
-        const lngDiff = pickupLng - busLng;
-        
-        // For Jordan routes (generally north-south or east-west)
-        // Passenger should be ahead or nearby, not too far behind
-        // We use a simplified check: passenger should be within ~50km radius
-        // and ideally ahead in the general direction
-        const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
-        
-        // ~0.5 degrees is roughly 50km
-        if (distance > 0.5) {
-          return res.status(400).json({ 
-            message: "موقعك بعيد جداً عن مسار الباص. يرجى اختيار باص أقرب إليك" 
-          });
-        }
-        
-        // Check if passenger is behind the bus (simplified: if latitude is significantly less)
-        // This is a simplified check - in production, you'd use actual route waypoints
-        // For demo purposes, we're lenient
+
+      await storage.deleteRouteWaypoints(busId);
+
+      const createdWaypoints = [];
+      for (let index = 0; index < parseResult.data.waypoints.length; index += 1) {
+        const point = parseResult.data.waypoints[index];
+        const waypoint = await storage.createRouteWaypoint({
+          busId,
+          lat: point.lat,
+          lng: point.lng,
+          orderIndex: index,
+          name: point.name ?? null,
+        });
+        createdWaypoints.push(waypoint);
       }
-      
-      // Get next priority number
-      const priority = await storage.getNextPriority(busId);
-      
-      const reservation = await storage.createReservation({
-        passengerId: passengerId || "anonymous",
-        busId,
-        pickupLat,
-        pickupLng,
-        status: "confirmed",
-        priority
-      });
-      
-      // Increment passenger count on the bus
-      const newPassengerCount = bus.currentPassengers + 1;
-      const isFull = newPassengerCount >= bus.totalCapacity;
-      
-      // Update bus: increment passengers and hide if full
-      await storage.updateBus(busId, {
-        currentPassengers: newPassengerCount,
-        isVisible: isFull ? false : bus.isVisible
-      });
-      
-      res.status(201).json(reservation);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+
+      return res.status(201).json(createdWaypoints);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // Update reservation
-  app.patch("/api/reservations/:id", async (req, res) => {
+  app.get("/api/reservations/user/:userId", requireAuth, async (req, res) => {
     try {
-      const { status } = req.body;
-      
-      // Only allow status updates
-      if (!status || !["pending", "confirmed", "completed", "cancelled"].includes(status)) {
+      const userId = readParam(req.params.userId);
+      if (!canAccessUserResource(req.user?.id, userId)) {
+        return res.status(403).json({ message: "ليس لديك صلاحية للوصول" });
+      }
+
+      const userReservations = await storage.getReservationsByUser(userId);
+      return res.json(userReservations);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.get("/api/reservations/user/:userId/active", requireAuth, async (req, res) => {
+    try {
+      const userId = readParam(req.params.userId);
+      if (!canAccessUserResource(req.user?.id, userId)) {
+        return res.status(403).json({ message: "ليس لديك صلاحية للوصول" });
+      }
+
+      const activeReservation = await storage.getActiveReservationByUser(userId);
+      return res.json(activeReservation ?? null);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.get("/api/reservations/bus/:busId", requireRole("driver"), async (req, res) => {
+    try {
+      const busId = readParam(req.params.busId);
+      const bus = await storage.getBus(busId);
+      if (!bus) {
+        return res.status(404).json({ message: "الباص غير موجود" });
+      }
+      if (bus.driverId !== req.user!.id) {
+        return res.status(403).json({ message: "ليس لديك صلاحية للوصول" });
+      }
+
+      const busReservations = await storage.getReservationsByBus(busId);
+      const withPassengers = await Promise.all(
+        busReservations.map(async (reservation) => {
+          const passenger = await storage.getUser(reservation.passengerId);
+          return {
+            ...reservation,
+            passengerName: passenger?.fullName ?? null,
+            passengerPhone: passenger?.phone ?? null,
+          };
+        }),
+      );
+      return res.json(withPassengers);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.post("/api/reservations", requireRole("citizen"), async (req, res) => {
+    try {
+      const parseResult = reservationRequestSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "بيانات غير صالحة", errors: parseResult.error.errors });
+      }
+
+      const passengerId = req.user!.id;
+      const { busId, pickupLat, pickupLng } = parseResult.data;
+
+      const createdReservation = await db.transaction(async (tx) => {
+        const busRows = await tx
+          .select()
+          .from(buses)
+          .where(eq(buses.id, busId))
+          .for("update");
+
+        const bus = busRows[0];
+        if (!bus) {
+          return { error: { status: 404, message: "الباص غير موجود" } } as const;
+        }
+
+        if (bus.currentPassengers >= bus.totalCapacity) {
+          return { error: { status: 400, message: "الباص ممتلئ" } } as const;
+        }
+
+        const existingReservations = await tx
+          .select({ id: reservations.id })
+          .from(reservations)
+          .where(
+            and(
+              eq(reservations.passengerId, passengerId),
+              inArray(reservations.status, ["pending", "confirmed"]),
+            ),
+          );
+
+        if (existingReservations.length > 0) {
+          return {
+            error: {
+              status: 400,
+              message: "لديك حجز نشط بالفعل. يرجى إلغاء حجزك الحالي قبل حجز باص جديد",
+              code: "ACTIVE_RESERVATION_EXISTS",
+            },
+          } as const;
+        }
+
+        if (bus.currentLat !== null && bus.currentLng !== null) {
+          const latDiff = pickupLat - bus.currentLat;
+          const lngDiff = pickupLng - bus.currentLng;
+          const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+          if (distance > 0.5) {
+            return { error: { status: 400, message: getBusDistanceViolationMessage() } } as const;
+          }
+        }
+
+        const [priorityResult] = await tx
+          .select({ maxPriority: max(reservations.priority) })
+          .from(reservations)
+          .where(and(eq(reservations.busId, busId), inArray(reservations.status, ["pending", "confirmed"])));
+
+        const nextPriority = (priorityResult.maxPriority ?? 0) + 1;
+
+        const [reservation] = await tx
+          .insert(reservations)
+          .values({
+            passengerId,
+            busId,
+            pickupLat,
+            pickupLng,
+            status: "confirmed",
+            priority: nextPriority,
+          })
+          .returning();
+
+        const newPassengerCount = bus.currentPassengers + 1;
+        const isFull = newPassengerCount >= bus.totalCapacity;
+
+        await tx
+          .update(buses)
+          .set({
+            currentPassengers: newPassengerCount,
+            isVisible: isFull ? false : bus.isVisible,
+          })
+          .where(eq(buses.id, bus.id));
+
+        return { reservation } as const;
+      });
+
+      if ("error" in createdReservation && createdReservation.error) {
+        const reservationError = createdReservation.error;
+        return res
+          .status(reservationError.status)
+          .json({ message: reservationError.message, code: reservationError.code });
+      }
+
+      return res.status(201).json(createdReservation.reservation);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.patch("/api/reservations/:id", requireAuth, async (req, res) => {
+    try {
+      const reservationId = readParam(req.params.id);
+      const parseResult = reservationStatusSchema.safeParse(req.body);
+      if (!parseResult.success) {
         return res.status(400).json({ message: "حالة غير صالحة" });
       }
-      
-      // Get current reservation
-      const currentReservation = await storage.getReservation(req.params.id);
+
+      const currentReservation = await storage.getReservation(reservationId);
       if (!currentReservation) {
         return res.status(404).json({ message: "الحجز غير موجود" });
       }
-      
-      if (status === "cancelled" && currentReservation.status !== "cancelled") {
+
+      const targetStatus = parseResult.data.status;
+
+      if (req.user!.role === "citizen") {
+        if (currentReservation.passengerId !== req.user!.id || targetStatus !== "cancelled") {
+          return res.status(403).json({ message: "ليس لديك صلاحية لهذا التعديل" });
+        }
+      }
+
+      if (req.user!.role === "driver") {
+        const bus = await storage.getBus(currentReservation.busId);
+        if (!bus || bus.driverId !== req.user!.id) {
+          return res.status(403).json({ message: "ليس لديك صلاحية لهذا التعديل" });
+        }
+      }
+
+      if (targetStatus === "cancelled" && currentReservation.status !== "cancelled") {
         const bus = await storage.getBus(currentReservation.busId);
         if (bus) {
           const newPassengerCount = Math.max(0, bus.currentPassengers - 1);
           const wasFull = bus.currentPassengers >= bus.totalCapacity;
           await storage.updateBus(bus.id, {
             currentPassengers: newPassengerCount,
-            ...(wasFull ? { isVisible: true } : {})
+            ...(wasFull ? { isVisible: true } : {}),
           });
         }
       }
-      
-      const reservation = await storage.updateReservation(req.params.id, { status });
-      
-      res.json(reservation);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+
+      const reservation = await storage.updateReservation(reservationId, { status: targetStatus });
+      return res.json(reservation);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // ============ ISSUE REPORTS ============
-  
-  // Create issue report
-  app.post("/api/reports", async (req, res) => {
+  app.post("/api/reports", requireAuth, async (req, res) => {
     try {
-      const { category, description, userId } = req.body;
-      
-      if (!category || !description) {
-        return res.status(400).json({ message: "النوع والوصف مطلوبان" });
+      const parseResult = reportSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "النوع والوصف مطلوبان", errors: parseResult.error.errors });
       }
-      
+
       const report = await storage.createIssueReport({
-        userId: userId || "anonymous",
-        category,
-        description,
-        status: "pending"
+        userId: req.user!.id,
+        category: parseResult.data.category,
+        description: parseResult.data.description,
+        status: "pending",
       });
-      
-      // Generate ticket number
+
       const ticketNumber = `TKT-${Date.now().toString(36).toUpperCase()}`;
-      
-      res.status(201).json({ ...report, ticketNumber });
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+      return res.status(201).json({ ...report, ticketNumber });
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
 
-  // Get all reports (admin only in real app)
-  app.get("/api/reports", async (req, res) => {
+  app.get("/api/reports", requireRole("driver"), async (_req, res) => {
     try {
       const reports = await storage.getIssueReports();
-      res.json(reports);
-    } catch (error) {
-      res.status(500).json({ message: "حدث خطأ في الخادم" });
+      return res.json(reports);
+    } catch {
+      return res.status(500).json({ message: "حدث خطأ في الخادم" });
     }
   });
-    // ============ LOCATION SEARCH PROXY ============
-    app.get("/api/search/location", async (req, res) => {
-        try {
-            const { q, lang } = req.query;
-            if (!q || typeof q !== "string" || q.length < 2) {
-                return res.json([]);
-            }
-            const language = lang === "ar" ? "ar" : "en";
-            // countrycodes=jo عشان يحصر البحث داخل الأردن فقط
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${language}`;
 
-            const response = await fetch(url, {
-                headers: {
-                    "User-Agent": "BusApp/1.0 (bus-p4kg.onrender.com)",
-                    "Accept-Language": language,
-                },
-            });
+  app.get("/api/search/location", async (req, res) => {
+    try {
+      const { q, lang } = req.query;
+      if (!q || typeof q !== "string" || q.length < 2) {
+        return res.json([]);
+      }
+      const language = lang === "ar" ? "ar" : "en";
+      const publicUrl = process.env.APP_PUBLIC_URL ?? "https://bus-app.vercel.app";
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=jo&limit=5&accept-language=${language}`;
 
-            if (!response.ok) {
-                return res.json([]);
-            }
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": `BusApp/1.0 (${publicUrl})`,
+          "Accept-Language": language,
+        },
+      });
 
-            const data = await response.json();
-            res.json(data);
-        } catch (error) {
-            console.error("Location search error:", error);
-            res.json([]);
-        }
-    });
+      if (!response.ok) {
+        return res.json([]);
+      }
+
+      const data = await response.json();
+      return res.json(data);
+    } catch {
+      return res.json([]);
+    }
+  });
+
   return httpServer;
 }

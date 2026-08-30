@@ -50,6 +50,7 @@ export const buses = pgTable("buses", {
   currentLat: real("current_lat"),
   currentLng: real("current_lng"),
   price: real("price"),
+  speed: real("speed"),
 });
 
 export const insertBusSchema = createInsertSchema(buses).pick({
@@ -65,6 +66,7 @@ export const insertBusSchema = createInsertSchema(buses).pick({
   currentLat: true,
   currentLng: true,
   price: true,
+  speed: true,
 });
 
 export type InsertBus = z.infer<typeof insertBusSchema>;

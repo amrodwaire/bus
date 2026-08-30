@@ -1,5 +1,6 @@
 ﻿import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import type { User } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
 interface AuthContextType {
     user: User | null;
@@ -16,9 +17,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // 👈 الرابط الثابت لسيرفرك على Render
-    const API_BASE_URL = "https://bus-p4kg.onrender.com";
-
     useEffect(() => {
         const savedUser = localStorage.getItem("coster_user");
         if (savedUser) {
@@ -33,12 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const login = async (username: string, password: string): Promise<boolean> => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username, password }),
-                credentials: "include", // 👈 مهم جداً عشان الموبايل يحفظ Session السيرفر
-            });
+            const response = await apiRequest("POST", "/api/auth/login", { username, password });
 
             if (response.ok) {
                 const data = await response.json();
@@ -57,12 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const register = async (userData: Partial<User> & { password: string }): Promise<boolean> => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(userData),
-                credentials: "include", // 👈 مهم جداً هنا أيضاً
-            });
+            const response = await apiRequest("POST", "/api/auth/register", userData);
 
             if (response.ok) {
                 const data = await response.json();
@@ -82,10 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const logout = async () => {
         try {
             // اختياري: إبلاغ السيرفر بتسجيل الخروج لإلغاء الـ Session
-            await fetch(`${API_BASE_URL}/api/auth/logout`, {
-                method: "POST",
-                credentials: "include"
-            });
+            await apiRequest("POST", "/api/auth/logout");
         } catch (e) {
             console.error("Logout error", e);
         }

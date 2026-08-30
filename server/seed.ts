@@ -1,6 +1,7 @@
 ﻿import { db } from "./storage";
 import * as schema from "@shared/schema";
 import { inArray } from "drizzle-orm";
+import { hashPassword } from "./auth";
 
 export async function seedIfEmpty() {
     try {
@@ -12,10 +13,13 @@ export async function seedIfEmpty() {
             inArray(schema.users.username, ["driver1", "user1"])
         );
 
+        const driverPassword = await hashPassword("123456");
+        const citizenPassword = await hashPassword("123456");
+
         // إضافة السائق
         const [driver] = await db.insert(schema.users).values({
             username: "driver1",
-            password: "123456",
+            password: driverPassword,
             fullName: "أحمد محمد السائق",
             phone: "0791234567",
             role: "driver",
@@ -26,7 +30,7 @@ export async function seedIfEmpty() {
         // إضافة المواطن
         await db.insert(schema.users).values({
             username: "user1",
-            password: "123456",
+            password: citizenPassword,
             fullName: "محمد علي المواطن",
             phone: "0799876543",
             role: "citizen",

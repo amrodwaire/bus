@@ -38,6 +38,7 @@ export interface IStorage {
     getUser(id: string): Promise<User | undefined>;
     getUserByUsername(username: string): Promise<User | undefined>;
     createUser(user: InsertUser): Promise<User>;
+    updateUserPassword(id: string, password: string): Promise<void>;
     getBus(id: string): Promise<Bus | undefined>;
     getBusByDriver(driverId: string): Promise<Bus | undefined>;
     getAllBuses(): Promise<Bus[]>;
@@ -90,6 +91,13 @@ export class DatabaseStorage implements IStorage {
         return user;
     }
 
+    async updateUserPassword(id: string, password: string): Promise<void> {
+        await db
+            .update(schema.users)
+            .set({ password })
+            .where(eq(schema.users.id, id));
+    }
+
     async getBus(id: string): Promise<Bus | undefined> {
         const [bus] = await db.select().from(schema.buses).where(eq(schema.buses.id, id));
         return bus;
@@ -114,7 +122,8 @@ export class DatabaseStorage implements IStorage {
             currentPassengers: insertBus.currentPassengers ?? 0,
             isVisible: insertBus.isVisible ?? true,
             currentLat: insertBus.currentLat ?? 31.9539,
-            currentLng: insertBus.currentLng ?? 35.9106
+            currentLng: insertBus.currentLng ?? 35.9106,
+            speed: insertBus.speed ?? 40
         }).returning();
         return bus;
     }

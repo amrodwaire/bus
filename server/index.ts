@@ -7,14 +7,29 @@ import { db } from "./storage";
 import * as schema from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { seedIfEmpty } from "./seed";
+import { setupAuth } from "./auth";
 
 // 👇 هذا السطر اللي كان طاير بالغلط!
 const app = express();
+const configuredOrigins = (process.env.CORS_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
-app.use(cors({
-    origin: true, // بيسمح لأي تطبيق (مثل موبايلك) يشبك مع السيرفر
-    credentials: true // 👈 هذا هو السطر السحري اللي بيسمح للـ APK يسجل دخول
-}));
+const defaultFrontendOrigin = process.env.FRONTEND_ORIGIN ?? "https://bus-app.vercel.app";
+const allowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : [defaultFrontendOrigin];
+
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            callback(new Error("Not allowed by CORS"));
+        },
+        credentials: true,
+    }),
+);
 
 const httpServer = createServer(app);
 
@@ -35,6 +50,7 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+setupAuth(app);
 
 export function log(message: string, source = "express") {
     const formattedTime = new Date().toLocaleTimeString("en-US", {

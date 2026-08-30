@@ -1,10 +1,24 @@
 ﻿import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-/**
- * 👈 هذا هو الرابط الذي ظهر في صورتك الأخيرة (رابط السيرفر)
- * نستخدمه هنا ليربط الموبايل بالسيرفر مباشرة
- */
-const API_BASE_URL = "https://bus-p4kg.onrender.com";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const buildApiUrl = (path: string) => {
+    if (path.startsWith("http")) return path;
+    return API_BASE_URL ? `${API_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}` : path;
+};
+let csrfTokenCache: string | null = null;
+
+async function getCsrfToken() {
+    if (csrfTokenCache) return csrfTokenCache;
+    const response = await fetch(buildApiUrl("/api/auth/csrf-token"), {
+        credentials: "include",
+    });
+    if (!response.ok) {
+        throw new Error("Failed to get CSRF token");
+    }
+    const data = await response.json();
+    csrfTokenCache = data.csrfToken;
+    return csrfTokenCache;
+}
 
 async function throwIfResNotOk(res: Response) {
     if (!res.ok) {
@@ -18,12 +32,16 @@ export async function apiRequest(
     url: string,
     data?: unknown | undefined,
 ): Promise<Response> {
-    // إصلاح الرابط هنا لتجنب التكرار
-    const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    const fullUrl = buildApiUrl(url);
+    const shouldAttachCsrf = ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
+    const csrfToken = shouldAttachCsrf ? await getCsrfToken() : null;
 
     const res = await fetch(fullUrl, {
         method,
-        headers: data ? { "Content-Type": "application/json" } : {},
+        headers: {
+            ...(data ? { "Content-Type": "application/json" } : {}),
+            ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        },
         body: data ? JSON.stringify(data) : undefined,
         credentials: "include", // مهم جداً لبقاء المستخدم مسجل دخول
     });
@@ -41,8 +59,7 @@ export const getQueryFn: <T>(options: {
         async ({ queryKey }) => {
             const urlPath = queryKey.join("/") as string;
 
-            // 🔥 هنا كان الخطأ (تم إزالة /api/ المكررة وإصلاح دمج الرابط)
-            const fullUrl = urlPath.startsWith("http") ? urlPath : `${API_BASE_URL}${urlPath.startsWith('/') ? '' : '/'}${urlPath}`;
+            const fullUrl = buildApiUrl(urlPath);
 
             const res = await fetch(fullUrl, {
                 credentials: "include",
