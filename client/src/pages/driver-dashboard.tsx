@@ -105,7 +105,10 @@ export default function DriverDashboard() {
 
     const { data: citizenLocations = [] } = useQuery<{ userId: string; name: string; lat: number; lng: number }[]>({
         queryKey: ["/api/citizen/locations", driverBus?.id],
-        queryFn: () => fetch(`/api/citizen/locations/${driverBus?.id}`).then(r => r.json()),
+        queryFn: async () => {
+            const response = await apiRequest("GET", `/api/citizen/locations/${driverBus?.id}`);
+            return response.json();
+        },
         enabled: !!driverBus?.id,
         refetchInterval: 5000,
     });

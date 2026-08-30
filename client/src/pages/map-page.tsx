@@ -69,8 +69,10 @@ export default function MapPage() {
 
     const { data: activeReservation } = useQuery({
         queryKey: ["/api/reservations/user", user?.id, "active"],
-        queryFn: () =>
-            fetch(`/api/reservations/user/${user?.id}/active`).then((r) => r.json()),
+        queryFn: async () => {
+            const response = await apiRequest("GET", `/api/reservations/user/${user?.id}/active`);
+            return response.json();
+        },
         enabled: !!user?.id && user?.role === "citizen",
     });
 
@@ -168,10 +170,10 @@ export default function MapPage() {
         const now = Date.now();
         if (now - citizenLocationSentRef.current < 10000) return;
         citizenLocationSentRef.current = now;
-        fetch("/api/citizen/location", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id, lat: userLocation.lat, lng: userLocation.lng }),
+        apiRequest("POST", "/api/citizen/location", {
+            userId: user.id,
+            lat: userLocation.lat,
+            lng: userLocation.lng,
         }).catch(() => { });
     }, [userLocation, user?.id, hasActiveReservation]);
 
