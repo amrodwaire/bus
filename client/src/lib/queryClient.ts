@@ -77,8 +77,8 @@ export const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
             queryFn: getQueryFn({ on401: "throw" }),
-            refetchInterval: 5000, // تحديث تلقائي كل 5 ثوانٍ لمراقبة حركة الباصات
-            refetchOnWindowFocus: true,
+            refetchInterval: false,
+            refetchOnWindowFocus: false,
             staleTime: 0,
             retry: false,
         },
